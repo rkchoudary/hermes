@@ -474,6 +474,25 @@ export const TaskPack = z.object({
   mode: JobMode.default('brownfield'),
   /** v0.5.1 (Codex MF-08) — risk class drives default merge policy + HITL gating. */
   risk_class: RiskClass.default('medium'),
+  /**
+   * v0.2 — specialized worker role. Narrows the worker's prompt to a
+   * specific intent. Pre-fab templates ship in templates/prompts/; planner
+   * can load one via --template flag. Skill memory is partitioned by
+   * (type, role) so reflection patterns are role-specific.
+   */
+  role: z.enum([
+    'generic',
+    'bug-fix',
+    'feature-add',
+    'refactor',
+    'test-coverage',
+    'dep-upgrade',
+    'security-fix',
+    'perf-fix',
+    'doc-update',
+    'migration',
+    'e2e-test',
+  ]).default('generic'),
   /** ≤ 500 chars; what success looks like, no fluff. */
   objective: z.string().max(500),
   /**

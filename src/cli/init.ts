@@ -27,32 +27,117 @@ interface InitArgs {
   noTask: boolean;
   mode: 'greenfield' | 'brownfield' | 'auto';
   module: string;
+  scan: boolean;
 }
 
 function parseArgs(argv: string[]): InitArgs {
-  const a: InitArgs = { force: false, quiet: false, noTask: false, mode: 'auto', module: 'M01' };
+  const a: InitArgs = { force: false, quiet: false, noTask: false, mode: 'auto', module: 'M01', scan: false };
   for (let i = 0; i < argv.length; i++) {
     const x = argv[i];
     if (x === '--force') a.force = true;
     else if (x === '--quiet') a.quiet = true;
     else if (x === '--no-task') a.noTask = true;
+    else if (x === '--scan') a.scan = true;
     else if (x === '--mode' && i + 1 < argv.length) {
       const v = argv[++i];
       if (v === 'greenfield' || v === 'brownfield') a.mode = v;
     }
     else if (x === '--module' && i + 1 < argv.length) a.module = argv[++i];
     else if (x === '-h' || x === '--help') {
-      console.log(`hermes init [--force] [--quiet] [--no-task] [--mode greenfield|brownfield] [--module M01]
+      console.log(`hermes init [--force] [--quiet] [--no-task] [--scan] [--mode greenfield|brownfield] [--module M01]
 
 Bootstrap a Hermes setup in the current directory. Detects greenfield vs
 brownfield, writes .hermes/config.yaml + module structure, and scaffolds
 a starter task pack you can dispatch immediately.
+
+  --scan    For brownfield repos: scan existing source tree and propose
+            a multi-module breakdown (one .hermes/modules/<MID>.yaml per
+            top-level subsystem detected). Operator can edit before use.
 
 Idempotent. Re-running without --force is safe.`);
       process.exit(0);
     }
   }
   return a;
+}
+
+interface ScanProposal {
+  modules: Array<{ id: string; name: string; allowed_paths: string[]; risk_class: 'low' | 'medium' | 'high' | 'critical'; rationale: string }>;
+  warnings: string[];
+}
+
+function scanRepo(cwd: string): ScanProposal {
+  const proposal: ScanProposal = { modules: [], warnings: [] };
+
+  // Identify top-level subsystems by directory structure + common conventions
+  const candidates: Array<{ dir: string; idHint: string; rationale: string; pathGlob: string; risk: 'low' | 'medium' | 'high' | 'critical' }> = [];
+  let entries: fs.Dirent[];
+  try { entries = fs.readdirSync(cwd, { withFileTypes: true }); }
+  catch { proposal.warnings.push('cannot read repo root'); return proposal; }
+
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === 'dist' || e.name === 'build' || e.name === 'tmp' || e.name === 'docs') continue;
+
+    // Recognize common monorepo conventions
+    if (e.name === 'apps' || e.name === 'packages' || e.name === 'services' || e.name === 'modules' || e.name === 'crates') {
+      try {
+        for (const sub of fs.readdirSync(path.join(cwd, e.name), { withFileTypes: true })) {
+          if (!sub.isDirectory()) continue;
+          if (sub.name.startsWith('.')) continue;
+          const idHint = sub.name.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 30);
+          candidates.push({
+            dir: path.join(e.name, sub.name),
+            idHint,
+            rationale: `top-level ${e.name}/ subsystem`,
+            pathGlob: `${e.name}/${sub.name}/**`,
+            risk: e.name === 'services' || sub.name.match(/auth|payment|checkout|billing|crypto/i) ? 'high' : 'medium',
+          });
+        }
+      } catch { /* skip */ }
+    } else if (e.name === 'src' || e.name === 'lib') {
+      // Single-package layout: don't subdivide; one module covers it
+      candidates.push({
+        dir: e.name,
+        idHint: 'core',
+        rationale: 'main source tree',
+        pathGlob: `${e.name}/**`,
+        risk: 'medium',
+      });
+    } else if (['app', 'web', 'api', 'server', 'client', 'mobile', 'cli', 'workers', 'jobs', 'cron'].includes(e.name)) {
+      candidates.push({
+        dir: e.name,
+        idHint: e.name,
+        rationale: `top-level ${e.name}/ subsystem`,
+        pathGlob: `${e.name}/**`,
+        risk: e.name === 'api' || e.name === 'server' ? 'high' : 'medium',
+      });
+    }
+  }
+
+  if (candidates.length === 0) {
+    proposal.warnings.push('no recognizable subsystems detected; defaulting to single-module M01 covering src/**');
+    return proposal;
+  }
+
+  // Cap at 20 modules (reasonable upper bound for an init scan)
+  if (candidates.length > 20) {
+    proposal.warnings.push(`scan found ${candidates.length} subsystems; capping at first 20 — edit .hermes/modules/ to add more`);
+    candidates.splice(20);
+  }
+
+  candidates.forEach((c, idx) => {
+    const id = `M${String(idx + 1).padStart(2, '0')}-${c.idHint}`.slice(0, 30);
+    proposal.modules.push({
+      id,
+      name: `${id} — ${c.rationale}`,
+      allowed_paths: [c.pathGlob, c.pathGlob.replace('/**', '/__tests__/**')],
+      risk_class: c.risk,
+      rationale: c.rationale,
+    });
+  });
+
+  return proposal;
 }
 
 function detectMode(cwd: string): { mode: 'greenfield' | 'brownfield'; signals: string[] } {
@@ -206,6 +291,30 @@ function gitignoreAddition(): string {
 `;
 }
 
+function writeNextSteps(args: InitArgs, log: (msg: string) => void): void {
+  log('');
+  log('───────────────────────────────────────────────────────────────');
+  log('  Next steps');
+  log('───────────────────────────────────────────────────────────────');
+  log('');
+  log(`  1. Edit your spec:        docs/specs/${args.module}/SPEC.md`);
+  log(`  2. Set the operator env:  export HERMES_OPERATOR="$(git config user.name)"`);
+  log(`  3. Set driver flag:       export AUTO_HARNESS_DRIVER=1`);
+  log(`  4. Plan the first task:   pnpm auto:plan --module ${args.module} --version v0.1 --type frd-author --auto-fill`);
+  log(`  5. Dispatch the worker:   pnpm auto:work`);
+  log(`  6. Land it:               pnpm auto:land`);
+  log('');
+  log('  Live observability:');
+  log(`    pnpm auto:dashboard-live   # http://localhost:7777`);
+  log(`    pnpm auto:metrics-daemon   # http://localhost:9090/metrics (Prometheus)`);
+  log(`    pnpm auto:mcp-server       # stdio JSON-RPC for MCP clients`);
+  log('');
+  log('  Or drive an end-to-end multi-module run:');
+  log(`    bash scripts/serial-by-module.sh         # one-at-a-time, auditable`);
+  log(`    bash scripts/parallel-by-module.sh 2     # 2 drivers in parallel`);
+  log('');
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
@@ -243,6 +352,59 @@ function main(): void {
     log(`✓ Wrote .hermes/config.yaml`);
   }
 
+  // Brownfield --scan: propose a multi-module breakdown
+  if (args.scan && detectedMode === 'brownfield') {
+    log('');
+    log('Scanning repo structure for module candidates…');
+    const proposal = scanRepo(cwd);
+    for (const w of proposal.warnings) log(`  ⚠ ${w}`);
+    if (proposal.modules.length === 0) {
+      log('  (no clear subsystems found; falling back to single-module starter)');
+    } else {
+      log(`✓ Proposing ${proposal.modules.length} modules from source structure:`);
+      for (const m of proposal.modules) {
+        const p = path.join(modulesDir, `${m.id}.yaml`);
+        const content = `# ${m.name}
+# Auto-proposed by hermes init --scan. Edit before dispatching.
+
+name: ${m.name}
+mode: brownfield
+risk_class: ${m.risk_class}
+
+allowed_paths:
+${m.allowed_paths.map(ap => `  - '${ap}'`).join('\n')}
+
+forbidden_paths:
+  - '.hermes/**'
+  - '.github/**'
+  - 'node_modules/**'
+  - 'dist/**'
+
+references:
+  spec: 'docs/specs/${m.id}/SPEC.md'
+
+# Rationale (auto-generated): ${m.rationale}
+`;
+        if (fs.existsSync(p) && !args.force) {
+          log(`    ${m.id}: exists, skipping`);
+        } else {
+          fs.writeFileSync(p, content);
+          log(`    ${m.id}: ${m.allowed_paths[0]} (risk=${m.risk_class})`);
+        }
+      }
+      log('');
+      log('Edit .hermes/modules/<MID>.yaml to refine paths, risk, and references.');
+      log('');
+      // Skip writing the starter M01 if we wrote scanned modules
+      if (proposal.modules.length > 0 && !args.force) {
+        log('  (skipping default M01 starter — using scanned modules)');
+        // Skip the default-module write below
+        writeNextSteps(args, log);
+        return;
+      }
+    }
+  }
+
   // Write starter module
   const moduleYamlPath = path.join(modulesDir, `${args.module}.yaml`);
   if (fs.existsSync(moduleYamlPath) && !args.force) {
@@ -273,27 +435,7 @@ function main(): void {
     log(`  .gitignore already excludes .agent-runs/`);
   }
 
-  log('');
-  log('───────────────────────────────────────────────────────────────');
-  log('  Next steps');
-  log('───────────────────────────────────────────────────────────────');
-  log('');
-  log(`  1. Edit your spec:        docs/specs/${args.module}/SPEC.md`);
-  log(`  2. Set the operator env:  export HERMES_OPERATOR="$(git config user.name)"`);
-  log(`  3. Set driver flag:       export AUTO_HARNESS_DRIVER=1`);
-  log(`  4. Plan the first task:   pnpm auto:plan --module ${args.module} --version v0.1 --type frd-author --auto-fill`);
-  log(`  5. Dispatch the worker:   pnpm auto:work`);
-  log(`  6. Land it:               pnpm auto:land`);
-  log('');
-  log('  Live observability:');
-  log(`    pnpm auto:dashboard-live   # http://localhost:7777`);
-  log(`    pnpm auto:metrics-daemon   # http://localhost:9090/metrics (Prometheus)`);
-  log(`    pnpm auto:mcp-server       # stdio JSON-RPC for MCP clients`);
-  log('');
-  log('  Or drive an end-to-end multi-module run:');
-  log(`    bash scripts/serial-by-module.sh         # one-at-a-time, auditable`);
-  log(`    bash scripts/parallel-by-module.sh 2     # 2 drivers in parallel`);
-  log('');
+  writeNextSteps(args, log);
 }
 
 main();

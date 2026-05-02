@@ -1,0 +1,72 @@
+{
+  "name": "hermes-vscode",
+  "displayName": "Hermes",
+  "description": "Status, dispatch, and live dashboard for the Hermes autonomous delivery harness.",
+  "version": "0.1.0",
+  "publisher": "hermes-harness",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other", "AI"],
+  "activationEvents": [
+    "onCommand:hermes.status",
+    "onCommand:hermes.dispatch",
+    "onCommand:hermes.dashboard",
+    "onCommand:hermes.diagnose",
+    "onCommand:hermes.steer",
+    "onCommand:hermes.interrupt"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "hermes.status", "title": "Hermes: Status snapshot", "icon": "$(pulse)" },
+      { "command": "hermes.dispatch", "title": "Hermes: Dispatch task", "icon": "$(rocket)" },
+      { "command": "hermes.dashboard", "title": "Hermes: Open live dashboard", "icon": "$(dashboard)" },
+      { "command": "hermes.diagnose", "title": "Hermes: Diagnose task", "icon": "$(stethoscope)" },
+      { "command": "hermes.steer", "title": "Hermes: Steer running task", "icon": "$(comment)" },
+      { "command": "hermes.interrupt", "title": "Hermes: Interrupt task", "icon": "$(stop)" }
+    ],
+    "configuration": {
+      "title": "Hermes",
+      "properties": {
+        "hermes.harnessRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Hermes installation. Empty = auto-detect via PATH (`npx hermes`)."
+        },
+        "hermes.dashboardUrl": {
+          "type": "string",
+          "default": "http://localhost:7777",
+          "description": "URL of the live dashboard (started via `pnpm auto:dashboard-live`)."
+        },
+        "hermes.mcpAutoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-start the MCP server on extension activation."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "hermes", "title": "Hermes", "icon": "$(rocket)" }
+      ]
+    },
+    "views": {
+      "hermes": [
+        { "id": "hermesStatus", "name": "Status" },
+        { "id": "hermesTasks", "name": "Tasks" }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "tsc -p ./",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5"
+  }
+}

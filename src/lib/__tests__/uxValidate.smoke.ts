@@ -37,6 +37,7 @@ function makePack(overrides: Partial<TaskPack['ux_validation']> = {}): TaskPack 
     type: 'code-sprint',
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'ux-test',
     version_target: 'v1.0',
     objective: 'test',

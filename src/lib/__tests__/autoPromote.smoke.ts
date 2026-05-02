@@ -44,6 +44,7 @@ function makePack(overrides: Partial<TaskPack> = {}): TaskPack {
     version_target: 'v1.0',
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     objective: 'test',
     acceptance_criteria: ['x'],
     allowed_paths: ['*'],

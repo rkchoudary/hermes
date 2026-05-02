@@ -100,6 +100,7 @@ console.log('\n[plateau smoke] starting…\n');
     type: 'code-sprint',
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X',
     version_target: 'v1',
     objective: 'x',
@@ -158,6 +159,7 @@ console.log('\n[plateau smoke] starting…\n');
     type: 'code-sprint',
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X',
     version_target: 'v1',
     objective: 'x',
@@ -206,6 +208,7 @@ console.log('\n[plateau smoke] starting…\n');
     type: 'code-sprint',
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X',
     version_target: 'v1',
     objective: 'x',
@@ -244,6 +247,7 @@ console.log('\n[plateau smoke] starting…\n');
   console.log('\n11. applyRubric: 2nd plateau pivot → try-different-reviewer');
   const pack: TaskPack = {
     schema_version: '1', task_id: 'TP-2026-04-28-004', run_id: 'test', type: 'code-sprint', mode: 'brownfield', risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X', version_target: 'v1', objective: 'x', acceptance_criteria: ['x'],
     allowed_paths: ['x'], forbidden_paths: [],
     context_budget: { max_task_pack_kb: 8, max_log_summary_kb: 4, max_codex_bundle_kb: 32 },
@@ -283,6 +287,7 @@ console.log('\n[plateau smoke] starting…\n');
   console.log('\n12. applyRubric: 3rd plateau pivot → tighten-scope');
   const pack: TaskPack = {
     schema_version: '1', task_id: 'TP-2026-04-28-005', run_id: 'test', type: 'code-sprint', mode: 'brownfield', risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X', version_target: 'v1', objective: 'x', acceptance_criteria: ['x'],
     allowed_paths: ['x'], forbidden_paths: [],
     context_budget: { max_task_pack_kb: 8, max_log_summary_kb: 4, max_codex_bundle_kb: 32 },
@@ -321,6 +326,7 @@ console.log('\n[plateau smoke] starting…\n');
   console.log('\n13. applyRubric: 4th plateau pivot → human-escalate');
   const pack: TaskPack = {
     schema_version: '1', task_id: 'TP-2026-04-28-006', run_id: 'test', type: 'code-sprint', mode: 'brownfield', risk_class: 'medium',
+    role: 'generic',
     module_or_sprint: 'X', version_target: 'v1', objective: 'x', acceptance_criteria: ['x'],
     allowed_paths: ['x'], forbidden_paths: [],
     context_budget: { max_task_pack_kb: 8, max_log_summary_kb: 4, max_codex_bundle_kb: 32 },

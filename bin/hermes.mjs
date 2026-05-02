@@ -24,8 +24,14 @@ const PKG_ROOT = path.resolve(__dirname, '..');
 const ROUTES = {
   init: 'init.ts',
   plan: 'plan.ts',
+  'plan-preview': 'plan-preview.ts',
   work: 'work.ts',
   land: 'land.ts',
+  interrupt: 'interrupt.ts',
+  steer: 'steer.ts',
+  diagnose: 'diagnose-task.ts',
+  'web-fetch': 'web-fetch.ts',
+  'vision-loop': 'vision-loop.ts',
   promote: 'promote.ts',
   consensus: 'consensus.ts',
   postflight: 'work.ts',  // postflight is a flag of work

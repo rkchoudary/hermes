@@ -35,6 +35,7 @@ export const OverrideKind = z.enum([
   'health-alert',                  // systemHealth raised an alert (disk, memory, registry size, etc.)
   'auto-promote-decision',         // v0.5.0: auto:tick --auto-promote evaluated a promotable task (eligible OR not)
   'interrupt-task',                // operator wrote a per-task interrupt sentinel (auto:interrupt)
+  'steer-task',                    // operator issued a mid-task steering directive (auto:steer)
 ]);
 export type OverrideKind = z.infer<typeof OverrideKind>;
 

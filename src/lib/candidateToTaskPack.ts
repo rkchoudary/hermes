@@ -272,6 +272,7 @@ export function candidateToTaskPack(candidate: GapCandidate, opts: SynthesisOpti
     version_target: 'v1.0',  // Codex: "small, boring" — keep generic; operator can rev
     mode: 'brownfield',
     risk_class: 'medium',
+    role: 'generic',
     objective: `${candidate.rationale.slice(0, 480)}${candidate.rationale.length > 480 ? '…' : ''}`,
     acceptance_criteria: acceptanceCriteria,
     allowed_paths: [...candidate.proposed_allowed_paths],
