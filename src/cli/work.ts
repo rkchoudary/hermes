@@ -250,6 +250,21 @@ function extractFoldinDirective(verdictPath: string): string {
  * destroy the base-SHA invariant while still recording a value).
  */
 function pinBaseSha(cwd: string): string {
+  // Greenfield mode (or any repo without an `origin` remote) skips the
+  // base-SHA invariant. If there's no remote there's nothing to compare to;
+  // we anchor on local HEAD instead. Operator can force-disable via
+  // HERMES_SKIP_BASE_SHA=1 if their workflow doesn't use remotes at all.
+  if (process.env.HERMES_SKIP_BASE_SHA === '1') {
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 5_000 });
+    return (head.stdout ?? '').trim() || 'noremote';
+  }
+  const remoteCheck = spawnSync('git', ['remote'], { cwd, encoding: 'utf8', timeout: 5_000 });
+  const hasRemote = remoteCheck.status === 0 && (remoteCheck.stdout ?? '').split('\n').filter(Boolean).includes('origin');
+  if (!hasRemote) {
+    console.warn('[base-sha] no `origin` remote configured — falling back to local HEAD (typical for greenfield repos)');
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', timeout: 5_000 });
+    return (head.stdout ?? '').trim() || 'noremote';
+  }
   const fetch = spawnSync('git', ['fetch', 'origin', 'main', '--quiet'], {
     cwd,
     encoding: 'utf8',
@@ -259,7 +274,8 @@ function pinBaseSha(cwd: string): string {
     throw new Error(
       `[base-sha] git fetch origin main FAILED (status=${fetch.status}). ` +
       `Refusing dispatch — base-SHA invariant cannot be verified. ` +
-      `stderr: ${(fetch.stderr ?? '').slice(0, 300)}`
+      `stderr: ${(fetch.stderr ?? '').slice(0, 300)}. ` +
+      `(Set HERMES_SKIP_BASE_SHA=1 to bypass for non-GitHub workflows.)`
     );
   }
   const result = spawnSync('git', ['rev-parse', 'origin/main'], {

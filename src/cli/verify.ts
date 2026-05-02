@@ -352,6 +352,13 @@ async function main() {
       if (fs.existsSync(taskPath)) {
         const pack = JSON.parse(fs.readFileSync(taskPath, 'utf8'));
         frdPath = pack.references?.frd_path?.replace('~', process.env.HOME || '');
+        // Resolve relative frd paths against the project root (REPO_ROOT
+        // = harnessRoot() honors HERMES_PROJECT_ROOT first). Without this,
+        // verify's cwd is whatever spawned it, which breaks greenfield/
+        // brownfield projects whose FRD lives at e.g. `docs/specs/M01/SPEC.md`.
+        if (frdPath && !path.isAbsolute(frdPath)) {
+          frdPath = path.join(REPO_ROOT, frdPath);
+        }
         // Resolve glob (e.g., FRD-M29-*) to actual path
         if (frdPath && frdPath.includes('*')) {
           const dir = path.dirname(frdPath);
