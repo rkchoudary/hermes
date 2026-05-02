@@ -55,19 +55,25 @@ const TOOLS = {
 
 function handleStatus(): unknown {
   const root = harnessRoot();
-  const runs = fs.readdirSync(path.join(root, '.agent-runs')).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
-  const latestRun = runs[runs.length - 1];
-  const tasksDir = path.join(root, '.agent-runs', latestRun, 'tasks');
+  const runsRoot = path.join(root, '.agent-runs');
+  if (!fs.existsSync(runsRoot)) {
+    return { latest_run: null, task_states: {}, parked_count: 0, note: 'no .agent-runs directory yet — fresh project' };
+  }
+  const runs = fs.readdirSync(runsRoot).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
+  const latestRun = runs[runs.length - 1] ?? null;
   const states: Record<string, number> = {};
-  if (fs.existsSync(tasksDir)) {
-    for (const f of fs.readdirSync(tasksDir)) {
-      try {
-        const p = JSON.parse(fs.readFileSync(path.join(tasksDir, f), 'utf8'));
-        states[p.state || 'unknown'] = (states[p.state || 'unknown'] || 0) + 1;
-      } catch { /* skip */ }
+  if (latestRun) {
+    const tasksDir = path.join(runsRoot, latestRun, 'tasks');
+    if (fs.existsSync(tasksDir)) {
+      for (const f of fs.readdirSync(tasksDir)) {
+        try {
+          const p = JSON.parse(fs.readFileSync(path.join(tasksDir, f), 'utf8'));
+          states[p.state || 'unknown'] = (states[p.state || 'unknown'] || 0) + 1;
+        } catch { /* skip */ }
+      }
     }
   }
-  const parkedFile = path.join(root, '.agent-runs', '_parked-modules.jsonl');
+  const parkedFile = path.join(runsRoot, '_parked-modules.jsonl');
   let parkedCount = 0;
   if (fs.existsSync(parkedFile)) {
     parkedCount = fs.readFileSync(parkedFile, 'utf8').split('\n').filter(Boolean).length;
@@ -79,11 +85,15 @@ function handleModuleState(params: Record<string, unknown>): unknown {
   const module = String(params.module || '');
   if (!module) return { error: 'module required' };
   const root = harnessRoot();
-  const runs = fs.readdirSync(path.join(root, '.agent-runs')).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
-  const latestRun = runs[runs.length - 1];
-  const tasksDir = path.join(root, '.agent-runs', latestRun, 'tasks');
+  const runsRoot = path.join(root, '.agent-runs');
+  if (!fs.existsSync(runsRoot)) {
+    return { module, tasks: [], council_sidecars: [], note: 'no .agent-runs directory yet — fresh project' };
+  }
+  const runs = fs.readdirSync(runsRoot).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d)).sort();
+  const latestRun = runs[runs.length - 1] ?? null;
   const moduleTasks: Array<Record<string, unknown>> = [];
-  if (fs.existsSync(tasksDir)) {
+  const tasksDir = latestRun ? path.join(runsRoot, latestRun, 'tasks') : '';
+  if (tasksDir && fs.existsSync(tasksDir)) {
     for (const f of fs.readdirSync(tasksDir)) {
       try {
         const p = JSON.parse(fs.readFileSync(path.join(tasksDir, f), 'utf8'));
