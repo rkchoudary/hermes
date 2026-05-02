@@ -1,0 +1,14 @@
+{
+  "name": "hermes-rag",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Framework-aware RAG plugin for Hermes — adds curated framework patterns to worker prompts when the task pack's allowed_paths or stack signals match.",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
