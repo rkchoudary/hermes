@@ -78,8 +78,9 @@ function findVendoredProjectRoot(startDir: string): string | null {
 export function resolveHarnessRoot(consumerImportMetaUrl?: string): string {
   if (cachedRoot !== null) return cachedRoot;
 
-  // Rule 1: env override
-  const envOverride = process.env.HARNESS_PROJECT_ROOT;
+  // Rule 1: env override — accept both HERMES_PROJECT_ROOT (canonical post-rename)
+  // and HARNESS_PROJECT_ROOT (legacy alias). HERMES_ wins if both set.
+  const envOverride = process.env.HERMES_PROJECT_ROOT || process.env.HARNESS_PROJECT_ROOT;
   if (envOverride && fs.existsSync(envOverride)) {
     cachedRoot = path.resolve(envOverride);
     return cachedRoot;

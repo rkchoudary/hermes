@@ -46,6 +46,12 @@ interface PlanArgs {
   version: string;
   type: TaskType;
   runId?: string;
+  objective?: string;
+  mode?: 'greenfield' | 'brownfield' | 'hybrid';
+  riskClass?: 'low' | 'medium' | 'high' | 'critical';
+  autoFill?: boolean;
+  template?: string;
+  allowedPaths?: string[];
 }
 
 function parseArgs(argv: string[]): PlanArgs {
@@ -57,16 +63,100 @@ function parseArgs(argv: string[]): PlanArgs {
     else if (arg === '--version' && i + 1 < argv.length) args.version = argv[++i];
     else if (arg === '--type' && i + 1 < argv.length) args.type = argv[++i] as TaskType;
     else if (arg === '--run-id' && i + 1 < argv.length) args.runId = argv[++i];
+    else if (arg === '--objective' && i + 1 < argv.length) args.objective = argv[++i];
+    else if (arg === '--mode' && i + 1 < argv.length) {
+      const v = argv[++i];
+      if (v === 'greenfield' || v === 'brownfield' || v === 'hybrid') args.mode = v;
+    }
+    else if (arg === '--risk-class' && i + 1 < argv.length) {
+      const v = argv[++i];
+      if (v === 'low' || v === 'medium' || v === 'high' || v === 'critical') args.riskClass = v;
+    }
+    else if (arg === '--auto-fill') args.autoFill = true;
+    else if (arg === '--template' && i + 1 < argv.length) args.template = argv[++i];
+    else if (arg === '--allowed-paths' && i + 1 < argv.length) args.allowedPaths = argv[++i].split(',');
   }
   if (!args.version || !args.type) {
     throw new Error(
-      'Required: --version <v> --type <frd-polish|frd-author|audit-log-route>; one of --module <MXX> or --sprint <SS-N>'
+      'Required: --version <v> --type <code-sprint|frd-polish|frd-author|test-coverage|audit-log-route>; one of --module <MXX> or --sprint <SS-N>'
     );
   }
   if (!args.module && !args.sprint) {
     throw new Error('Required: --module <MXX> or --sprint <SS-N>');
   }
   return args as PlanArgs;
+}
+
+/**
+ * Read .hermes/modules/<MID>.yaml from the calling project (if present)
+ * and extract allowed_paths / forbidden_paths / references / risk_class.
+ *
+ * Minimal YAML reader — handles the keys the init wizard writes. For
+ * complex YAML, operators can pass --allowed-paths directly on the CLI.
+ */
+interface ModuleConfig {
+  name?: string;
+  mode?: string;
+  risk_class?: string;
+  allowed_paths?: string[];
+  forbidden_paths?: string[];
+  references?: { spec?: string; code_paths?: string[]; obsidian_paths?: string[] };
+}
+
+function loadModuleConfig(moduleId: string): ModuleConfig | null {
+  const projectRoot = process.env.HERMES_PROJECT_ROOT || process.env.HARNESS_PROJECT_ROOT || process.cwd();
+  const cfgPath = path.join(projectRoot, '.hermes', 'modules', `${moduleId}.yaml`);
+  if (!fs.existsSync(cfgPath)) return null;
+  try {
+    const text = fs.readFileSync(cfgPath, 'utf8');
+    const cfg: ModuleConfig = {};
+    type Section = 'allowed_paths' | 'forbidden_paths' | 'references' | 'references.code_paths' | 'references.obsidian_paths' | null;
+    let section: Section = null;
+    const stripQuotes = (s: string): string => s.replace(/^['"]|['"]$/g, '');
+    for (const rawLine of text.split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const indent = line.length - line.trimStart().length;
+
+      if (trimmed.startsWith('- ')) {
+        const item = stripQuotes(trimmed.replace(/^-\s+/, ''));
+        if (section === 'allowed_paths') (cfg.allowed_paths ??= []).push(item);
+        else if (section === 'forbidden_paths') (cfg.forbidden_paths ??= []).push(item);
+        else if (section === 'references.code_paths') {
+          (cfg.references ??= {}).code_paths ??= []; cfg.references.code_paths!.push(item);
+        }
+        else if (section === 'references.obsidian_paths') {
+          (cfg.references ??= {}).obsidian_paths ??= []; cfg.references.obsidian_paths!.push(item);
+        }
+        continue;
+      }
+
+      if (indent === 0) {
+        const m = trimmed.match(/^(\w+):\s*(.*)$/);
+        if (!m) { section = null; continue; }
+        const [, key, value] = m;
+        if (key === 'references' && !value) { section = 'references'; continue; }
+        if (key === 'allowed_paths' && !value) { section = 'allowed_paths'; continue; }
+        if (key === 'forbidden_paths' && !value) { section = 'forbidden_paths'; continue; }
+        section = null;
+        if (key === 'name') cfg.name = stripQuotes(value);
+        else if (key === 'mode') cfg.mode = stripQuotes(value);
+        else if (key === 'risk_class') cfg.risk_class = stripQuotes(value);
+        continue;
+      }
+
+      if (section === 'references' || section === 'references.code_paths' || section === 'references.obsidian_paths') {
+        const m = trimmed.match(/^(\w+):\s*(.*)$/);
+        if (!m) continue;
+        const [, key, value] = m;
+        if (key === 'spec' && value) (cfg.references ??= {}).spec = stripQuotes(value);
+        else if (key === 'code_paths' && !value) section = 'references.code_paths';
+        else if (key === 'obsidian_paths' && !value) section = 'references.obsidian_paths';
+      }
+    }
+    return cfg;
+  } catch { return null; }
 }
 
 function todayUtc(): Date {
@@ -251,6 +341,169 @@ function buildAuditLogRoutePack(args: PlanArgs, runId: string, taskId: string): 
   });
 }
 
+/**
+ * Generic code-sprint builder. Reads `.hermes/modules/<MID>.yaml` if present
+ * for allowed_paths / risk_class, otherwise falls back to sensible defaults
+ * (src/<module>/**, tests/<module>/**). Works for greenfield (empty repo)
+ * and brownfield (existing codebase) both.
+ *
+ * Operator can override key fields via CLI:
+ *   --objective "<one-paragraph what to build>"
+ *   --mode greenfield|brownfield|hybrid
+ *   --risk-class low|medium|high|critical
+ *   --allowed-paths "src/auth/**,tests/auth/**"
+ */
+function buildCodeSprintPack(args: PlanArgs, runId: string, taskId: string): TaskPack {
+  if (!args.module) throw new Error('code-sprint requires --module');
+  const moduleSlug = args.module.toLowerCase();
+  const cfg = loadModuleConfig(args.module);
+
+  const objective = args.objective ?? `Implement ${args.module} per its spec at docs/specs/${args.module}/SPEC.md. Every acceptance criterion testable; coverage on changed files ≥70%; lint + typecheck pass; no new HIGH/CRITICAL CVEs.`;
+  const mode = args.mode ?? (cfg?.mode === 'greenfield' || cfg?.mode === 'brownfield' || cfg?.mode === 'hybrid' ? cfg.mode : 'brownfield');
+  const riskClass = args.riskClass ?? (cfg?.risk_class === 'low' || cfg?.risk_class === 'medium' || cfg?.risk_class === 'high' || cfg?.risk_class === 'critical' ? cfg.risk_class : 'medium');
+
+  const allowedPaths = args.allowedPaths
+    ?? cfg?.allowed_paths
+    ?? [
+      `src/${moduleSlug}/**`,
+      `src/**/${moduleSlug}/**`,
+      `tests/${moduleSlug}/**`,
+      `tests/**/${moduleSlug}/**`,
+      `__tests__/${moduleSlug}/**`,
+    ];
+
+  const forbiddenPaths = cfg?.forbidden_paths ?? [
+    '.hermes/**',
+    '.github/**',
+    'node_modules/**',
+    'dist/**',
+    'package.json',     // deps changes need separate review
+    'package-lock.json',
+    'pnpm-lock.yaml',
+  ];
+
+  const specPath = cfg?.references?.spec ?? `docs/specs/${args.module}/SPEC.md`;
+
+  return TaskPack.parse({
+    task_id: taskId,
+    run_id: runId,
+    type: 'code-sprint' as TaskType,
+    module_or_sprint: `${args.module}-impl-${args.version}`,
+    version_target: args.version,
+    mode,
+    risk_class: riskClass,
+    role: 'feature-add',
+    objective,
+    acceptance_criteria: [
+      `Every requirement in ${specPath} has corresponding code (function, type, route, test)`,
+      `Lint passes: pnpm lint (or project's lint command)`,
+      `Tests pass: pnpm test (or project's test command)`,
+      `Coverage on changed files ≥70%`,
+      `No new HIGH/CRITICAL CVEs introduced (pnpm audit --audit-level=high)`,
+      `No files outside allowed_paths modified`,
+      `Diff is reviewable — break large changes into commits ≤200 lines each`,
+    ],
+    allowed_paths: allowedPaths,
+    forbidden_paths: forbiddenPaths,
+    context_budget: ContextBudget.parse({
+      max_task_pack_kb: 12,
+      max_log_summary_kb: 8,
+      max_codex_bundle_kb: 64,
+    }),
+    references: References.parse({
+      frd_path: specPath,
+      code_paths: cfg?.references?.code_paths ?? [],
+      obsidian_paths: cfg?.references?.obsidian_paths ?? [],
+    }),
+    commands: Commands.parse({
+      duplicate_scan: `grep -rn "${moduleSlug}" src/ 2>/dev/null | head -10`,
+      implement: [
+        `# Worker reads ${specPath} (or asks operator for the spec)`,
+        `# Worker implements within allowed_paths`,
+        `# Worker writes tests in __tests__ or tests/ alongside source`,
+      ],
+      test: ['pnpm test', 'npm test'],
+      typecheck: 'pnpm exec tsc --noEmit',
+      lint: 'pnpm lint',
+    }),
+    consensus: Consensus.parse({
+      reviewer: 'codex-5.5-xhigh',
+      prompt_template: 'templates/prompts/feature-add.yaml',
+      gate_threshold: riskClass === 'critical' ? 8.0 : riskClass === 'high' ? 7.5 : 7.0,
+      max_rounds: 3,
+    }),
+    state: 'planned',
+    state_history: [
+      {
+        from: 'unplanned',
+        to: 'planned',
+        at: new Date().toISOString(),
+        by: 'orchestrator',
+        reason: `auto:plan generated code-sprint pack for ${args.module} ${args.version} (mode=${mode}, risk=${riskClass})`,
+      },
+    ],
+    evidence_dir: evidenceDir(runId, taskId),
+    notes: cfg ? [{ at: new Date().toISOString(), by: 'auto:plan', text: `Loaded config from .hermes/modules/${args.module}.yaml` }] : [],
+  });
+}
+
+/**
+ * Generic test-coverage builder — adds tests for an existing module without
+ * changing source. Mirrors the bug-fix template's "tests only" constraint.
+ */
+function buildTestCoveragePack(args: PlanArgs, runId: string, taskId: string): TaskPack {
+  if (!args.module) throw new Error('test-coverage requires --module');
+  const moduleSlug = args.module.toLowerCase();
+  const cfg = loadModuleConfig(args.module);
+  const allowedPaths = args.allowedPaths
+    ?? [
+      `tests/${moduleSlug}/**`,
+      `tests/**/${moduleSlug}/**`,
+      `__tests__/${moduleSlug}/**`,
+      `src/${moduleSlug}/**/__tests__/**`,
+      `src/${moduleSlug}/**/*.test.ts`,
+      `src/${moduleSlug}/**/*.spec.ts`,
+    ];
+
+  return TaskPack.parse({
+    task_id: taskId,
+    run_id: runId,
+    type: 'test-coverage' as TaskType,
+    module_or_sprint: `${args.module}-tests-${args.version}`,
+    version_target: args.version,
+    mode: args.mode ?? 'brownfield',
+    risk_class: args.riskClass ?? 'low',
+    role: 'test-coverage',
+    objective: args.objective ?? `Add Vitest/Jest tests for ${args.module} module to bring coverage to ≥80%. Tests only — production source MUST NOT change. Discovered bugs documented in risk-register.md, not fixed.`,
+    acceptance_criteria: [
+      `Coverage on ${moduleSlug} ≥80% (statements, branches, lines)`,
+      `No production source files modified (git diff --stat src/ | grep -v test)`,
+      `All new tests deterministic (run 3× without flake)`,
+      `Discovered bugs documented in risk-register.md`,
+    ],
+    allowed_paths: allowedPaths,
+    forbidden_paths: [
+      '.hermes/**',
+      '.github/**',
+      'package.json',
+      `src/${moduleSlug}/**/!(*.test.ts|*.spec.ts|__tests__/**)`,  // production source forbidden
+    ],
+    context_budget: ContextBudget.parse({ max_task_pack_kb: 8, max_log_summary_kb: 4, max_codex_bundle_kb: 32 }),
+    references: References.parse({ frd_path: cfg?.references?.spec ?? `docs/specs/${args.module}/SPEC.md`, code_paths: cfg?.references?.code_paths ?? [], obsidian_paths: [] }),
+    commands: Commands.parse({
+      duplicate_scan: `grep -rn "${moduleSlug}" tests/ 2>/dev/null | head -10`,
+      test: ['pnpm test', 'npm test'],
+      typecheck: 'pnpm exec tsc --noEmit',
+      lint: 'pnpm lint',
+    }),
+    consensus: Consensus.parse({ reviewer: 'codex-5.5-xhigh', prompt_template: 'templates/prompts/test-coverage.yaml', gate_threshold: 7.0, max_rounds: 2 }),
+    state: 'planned',
+    state_history: [{ from: 'unplanned', to: 'planned', at: new Date().toISOString(), by: 'orchestrator', reason: `auto:plan generated test-coverage pack for ${args.module} ${args.version}` }],
+    evidence_dir: evidenceDir(runId, taskId),
+    notes: [],
+  });
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const runId = ensureRun(args.runId);
@@ -266,9 +519,15 @@ function main() {
     case 'audit-log-route':
       pack = buildAuditLogRoutePack(args, runId, taskId);
       break;
+    case 'code-sprint':
+      pack = buildCodeSprintPack(args, runId, taskId);
+      break;
+    case 'test-coverage':
+      pack = buildTestCoveragePack(args, runId, taskId);
+      break;
     default:
       throw new Error(
-        `Task type ${args.type} not yet implemented in v0.1. Supported: frd-polish, frd-author, audit-log-route. Extend src/cli/plan.ts to add more.`
+        `Task type ${args.type} not yet implemented in v0.1. Supported: frd-polish, frd-author, code-sprint, test-coverage, audit-log-route. Extend src/cli/plan.ts to add more.`
       );
   }
 
