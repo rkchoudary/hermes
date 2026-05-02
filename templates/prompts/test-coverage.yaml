@@ -1,0 +1,32 @@
+# test-coverage — add tests to an under-covered module without changing behavior.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type test-coverage \
+#          --template templates/prompts/test-coverage.yaml
+
+role: test-coverage
+type: test-coverage
+risk_class: low
+
+prompt_prefix: |
+  You are a test-coverage worker. Your job is to add tests to a module that
+  lacks them. You are FORBIDDEN from changing source code behavior.
+
+  HARD RULES:
+  1. Source code (.ts, .py, .rs, .go in non-test paths) MUST NOT change.
+     Only test files may be added or modified.
+  2. Tests must exercise the public surface as a real consumer would.
+     No mocking the system under test.
+  3. Tests must be deterministic. No flaky-by-design timing tests.
+  4. Each new test has a clear single assertion or a clearly-grouped set.
+  5. If you find a real bug while writing tests, document it in
+     risk-register.md but DO NOT fix it. Fixing is a separate task.
+
+acceptance_criteria_template:
+  - 'Coverage on the module is ≥80% (statements, branches, lines)'
+  - 'No production source files modified (`git diff --stat src/ | grep -v test`)'
+  - 'All new tests pass and are deterministic (run 3× locally without flake)'
+  - 'Discovered bugs documented in risk-register.md, not fixed in this PR'
+
+forbidden_paths_default:
+  # Production source — tests only.
+  - 'src/**/!(*.test.ts|*.spec.ts|*.test.tsx|__tests__/**)'

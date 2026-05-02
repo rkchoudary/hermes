@@ -5,9 +5,16 @@
   "license": "Apache-2.0",
   "private": false,
   "type": "module",
+  "bin": {
+    "hermes": "bin/hermes.mjs"
+  },
   "scripts": {
     "build": "tsc",
+    "hermes:init": "tsx src/cli/init.ts",
+    "auto:init": "tsx src/cli/init.ts",
+    "auto:interrupt": "tsx src/cli/interrupt.ts",
     "auto:plan": "tsx src/cli/plan.ts",
+    "auto:plan-preview": "tsx src/cli/plan-preview.ts",
     "auto:verify-claims": "tsx src/cli/verify.ts",
     "auto:flush-progress": "tsx src/cli/flush.ts",
     "auto:resume-session": "tsx src/cli/resume.ts",

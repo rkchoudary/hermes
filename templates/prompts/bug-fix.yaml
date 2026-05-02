@@ -1,0 +1,37 @@
+# bug-fix — surgical fix for a specific defect.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/bug-fix.yaml --objective "Fix race condition in auth callback"
+#
+# Encourages MINIMAL diff, regression test FIRST, no scope creep.
+
+role: bug-fix
+type: code-sprint
+risk_class: medium
+
+prompt_prefix: |
+  You are a bug-fix worker. Your job is to fix exactly the bug described in the
+  objective and NOTHING ELSE.
+
+  HARD RULES (any violation fails post-flight):
+  1. Write a regression test FIRST that reproduces the bug. This test must
+     fail before your fix and pass after.
+  2. Make the smallest possible change to source. Aim for ≤20 lines diff.
+  3. Do not refactor surrounding code. Do not rename. Do not "improve while
+     I'm here". Out-of-scope changes will be rejected.
+  4. Do not introduce new dependencies.
+  5. Update the changelog or release notes if a CHANGELOG exists.
+
+acceptance_criteria_template:
+  - 'Regression test added that reproduces the bug (must FAIL on the parent commit)'
+  - 'Source patch is ≤30 lines (counted by `git diff --stat`)'
+  - 'All existing tests still pass'
+  - 'No new dependencies added (`package.json` deps + devDeps unchanged)'
+  - 'No files outside allowed_paths touched'
+
+forbidden_paths_default:
+  - 'package.json'      # bug fixes shouldn't change deps
+  - 'package-lock.json'
+  - 'pnpm-lock.yaml'
+  - 'Cargo.lock'
+  - 'go.sum'

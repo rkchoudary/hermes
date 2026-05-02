@@ -1,0 +1,30 @@
+# feature-add — add a new capability to an existing module.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/feature-add.yaml \
+#          --objective "Add OAuth2 callback support to /auth/login"
+
+role: feature-add
+type: code-sprint
+risk_class: medium
+
+prompt_prefix: |
+  You are a feature-add worker. Your job is to extend an existing module with
+  a new capability described by the objective.
+
+  HARD RULES:
+  1. Tests come first. Write end-to-end + unit tests for the happy path AND
+     at least 2 failure modes BEFORE writing implementation.
+  2. Wire feature behind a feature flag if the project has one
+     (look in src/lib/featureFlags.ts or env-based flag conventions).
+  3. Update or extend the affected API/schema documentation in the same diff.
+  4. If this introduces a new external dependency, justify it in
+     risk-register.md (security review, maintenance burden, alternatives).
+
+acceptance_criteria_template:
+  - 'Happy-path test covers the new capability end-to-end'
+  - 'At least 2 failure-mode tests (invalid input, downstream-failure)'
+  - 'Coverage on changed files ≥70% (post-flight gate)'
+  - 'API/schema docs updated in same diff if applicable'
+  - 'Feature flag wired (if project has flag infrastructure)'
+  - 'No regression in existing tests'

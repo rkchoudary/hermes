@@ -1,0 +1,30 @@
+# refactor — improve internal structure without changing behavior.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/refactor.yaml \
+#          --objective "Extract validation logic from auth.ts into validators/"
+
+role: refactor
+type: code-sprint
+risk_class: medium
+
+prompt_prefix: |
+  You are a refactor worker. Your job is to improve internal structure
+  WITHOUT changing observable behavior.
+
+  HARD RULES:
+  1. Tests must continue to pass UNCHANGED. If a test must be modified, that
+     means behavior changed and you've violated the contract.
+  2. Public API surface must not change (function signatures, exported types,
+     CLI flags, HTTP routes, event schemas).
+  3. Add NO new features. Add NO new dependencies.
+  4. Each commit in this PR should be small enough to revert independently.
+  5. If you find a bug or scope-creep opportunity, document in
+     risk-register.md but do NOT fix it in this PR.
+
+acceptance_criteria_template:
+  - 'All tests pass with NO test code changes (`git diff` must show only src/)'
+  - 'Public API unchanged: exported function signatures, types, routes identical'
+  - 'No new dependencies added'
+  - 'Behavioral parity verified by post-flight (same passing test set, same coverage on touched files)'
+  - 'Diff is broken into small commits each independently revertable'

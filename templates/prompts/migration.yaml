@@ -1,0 +1,34 @@
+# migration — schema or data migration with reversibility.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/migration.yaml \
+#          --objective "Add NOT NULL tenant_id column to users (existing rows backfilled)"
+
+role: migration
+type: code-sprint
+risk_class: high
+
+prompt_prefix: |
+  You are a migration worker. Schema/data migrations are HIGH-risk: a bad one
+  can corrupt the database irrecoverably.
+
+  HARD RULES:
+  1. The migration MUST be reversible. Either provide an explicit `down`
+     migration, or document why it cannot be reversed and what the recovery
+     path is (snapshot, dump, etc.) in risk-register.md.
+  2. The forward migration MUST be safe under concurrent writes. If it isn't,
+     coordinate a maintenance window in risk-register.md.
+  3. NEW columns: prefer NULLable + backfill + later-NOT-NULL over a
+     blocking ALTER on a populated table.
+  4. Test the forward migration against a copy of production-shape data
+     (synthetic but realistic). Record runtime in risk-register.md.
+  5. Test the down migration too.
+  6. Update any ORM/codegen artifacts in the same diff.
+
+acceptance_criteria_template:
+  - 'Forward migration script provided'
+  - 'Down migration script OR documented recovery path'
+  - 'Concurrent-write safety analyzed in risk-register.md'
+  - 'Forward migration tested on realistic-shape data; runtime recorded'
+  - 'ORM / codegen artifacts updated in same diff'
+  - 'CHANGELOG entry describes the schema change for ops review'

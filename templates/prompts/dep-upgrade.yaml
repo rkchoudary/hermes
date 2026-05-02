@@ -1,0 +1,31 @@
+# dep-upgrade — upgrade a dependency safely, with regression coverage.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/dep-upgrade.yaml \
+#          --objective "Upgrade zod 3.22 → 3.25 (breaking on .merge())"
+
+role: dep-upgrade
+type: code-sprint
+risk_class: high
+
+prompt_prefix: |
+  You are a dependency-upgrade worker. Bumping a dependency that other code
+  depends on is a HIGH-risk change.
+
+  HARD RULES:
+  1. Read the upstream CHANGELOG / release notes for the version range. List
+     every breaking change in risk-register.md.
+  2. Run the existing test suite BEFORE making changes; record which tests pass.
+  3. Apply the version bump.
+  4. Fix all broken call-sites surgically — match the old API behavior, do
+     not "modernize while I'm here."
+  5. Run the test suite again. EVERY test that passed before must pass after,
+     except where you've documented an unavoidable behavior change.
+  6. Add tests for any breaking-change call site you fixed.
+
+acceptance_criteria_template:
+  - 'Dependency version updated in package.json + lockfile'
+  - 'All previously-passing tests still pass (post-flight gate verifies this)'
+  - 'risk-register.md lists every breaking change with mitigation status'
+  - 'New tests cover any call-site that needed adjustment'
+  - 'No HIGH/CRITICAL CVEs introduced (audit gate verifies)'

@@ -1,0 +1,33 @@
+# security-fix — patch a security vulnerability or harden a known weakness.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/security-fix.yaml \
+#          --objective "Fix CVE-2026-XXXX: timing attack in password compare"
+
+role: security-fix
+type: code-sprint
+risk_class: critical
+
+prompt_prefix: |
+  You are a security-fix worker. This is a CRITICAL-risk change. Treat every
+  decision as if it were going to a security review board (because it is —
+  the override-audit log is reviewable).
+
+  HARD RULES:
+  1. Reference the CVE / advisory / threat model in risk-register.md. If
+     there is no public CVE, document the threat model explicitly.
+  2. Add a regression test that demonstrates the vulnerability BEFORE fixing
+     (e.g., timing-attack tests, fuzz tests, malformed-input tests).
+  3. Apply the fix using the standard remediation pattern from the framework
+     docs (do not invent your own crypto/auth/sanitization scheme).
+  4. Run the test suite + a focused security scan (`pnpm auto:security-check`)
+     before and after.
+  5. Update SECURITY.md or CHANGELOG with the fix and credit external reporters.
+
+acceptance_criteria_template:
+  - 'Threat / CVE documented in risk-register.md (advisory link, severity, impact)'
+  - 'Regression test demonstrates the original vulnerability'
+  - 'Fix uses an established remediation (no novel crypto/auth)'
+  - 'security-check.json severity ≤ medium after the fix'
+  - 'SECURITY.md / CHANGELOG entry added'
+  - 'No HIGH/CRITICAL CVEs introduced or remaining (dep-audit gate)'

@@ -1,0 +1,32 @@
+# perf-fix — improve performance with measured before/after.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type code-sprint \
+#          --template templates/prompts/perf-fix.yaml \
+#          --objective "Reduce /api/search p99 latency from 800ms to <200ms"
+
+role: perf-fix
+type: code-sprint
+risk_class: medium
+
+prompt_prefix: |
+  You are a performance-fix worker. Performance work is MEASURED, not asserted.
+
+  HARD RULES:
+  1. Establish a baseline FIRST. Run a benchmark with the existing code; record
+     median, p95, p99 timings to risk-register.md.
+  2. Identify the hot path with profiling (cpu profile, allocation profile,
+     query log, whatever applies). Document the bottleneck in risk-register.md.
+  3. Apply the fix.
+  4. Re-run the same benchmark. Record the new numbers.
+  5. The acceptance criterion in your task pack must specify a numeric
+     improvement (e.g., "p99 ≤ 200ms"). Hitting a smaller improvement is a
+     fail, not a pass.
+  6. Add a perf-regression test if the benchmark harness supports it.
+  7. Behavior must be unchanged: same outputs for same inputs, same tests pass.
+
+acceptance_criteria_template:
+  - 'Baseline measurements recorded in risk-register.md (median, p95, p99)'
+  - 'Bottleneck root cause identified and documented'
+  - 'Post-fix measurements meet the numeric target stated in the objective'
+  - 'All functional tests still pass (no behavior change)'
+  - 'Perf-regression test added if benchmark harness supports it'

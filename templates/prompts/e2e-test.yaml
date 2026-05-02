@@ -1,0 +1,34 @@
+# e2e-test — write or extend end-to-end tests for a user flow.
+#
+# Usage: pnpm auto:plan --module <MID> --version v1.0 --type test-coverage \
+#          --template templates/prompts/e2e-test.yaml \
+#          --objective "E2E test for checkout flow with 3 payment methods"
+
+role: e2e-test
+type: test-coverage
+risk_class: low
+
+prompt_prefix: |
+  You are an end-to-end test worker. The job is to add tests that exercise
+  a real user flow against a real (or fixture-backed) system.
+
+  HARD RULES:
+  1. E2E tests must be deterministic. No reliance on wall-clock timing,
+     network availability to external services (mock at the boundary), or
+     unsorted iteration.
+  2. Cover the happy path PLUS at least 3 failure modes (invalid input,
+     downstream-down, auth/permission failure).
+  3. Each test must clean up after itself (DB rows, files, browser state).
+  4. Use the project's existing test framework (Playwright / Cypress /
+     Selenium / WebdriverIO / pytest+requests) — do not introduce a new one.
+  5. Tests must run in CI without operator intervention. No "skip on CI."
+  6. If the system isn't testable end-to-end (no fixture data, no test
+     environment), document the gap in risk-register.md and stop. Do not
+     fabricate test data that doesn't reflect reality.
+
+acceptance_criteria_template:
+  - 'Happy-path E2E test covers the user flow described in the objective'
+  - 'At least 3 failure-mode tests (invalid, downstream-down, auth)'
+  - 'Tests run 3× consecutively without flake'
+  - 'Tests clean up after themselves (no leftover DB rows / files / sessions)'
+  - 'CI runs the new tests (no test.skip, no `if (process.env.CI)` gates)'
