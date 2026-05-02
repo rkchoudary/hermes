@@ -82,7 +82,7 @@ function simulateVerifyClaims(diff: string): boolean {
   return acClaimsInComments;
 }
 
-/** M8 security-check simulator: BCBS-239/SOX/SR-11/7/IFRS-9/PII keywords + RCE patterns. */
+/** M8 security-check simulator: BCBS-239/SOX/generic-model-governance/IFRS 9/PII keywords + RCE patterns. */
 function simulateSecurityCheck(diff: string): boolean {
   const patterns = [
     /\beval\s*\(/,                 // eval-injection

@@ -50,7 +50,7 @@ export const HardGateId = z.enum([
   'OBSERVABILITY-LIVE', // Logs + metrics + traces flowing
   'EVIDENCE-COMPLETE',  // All required evidence pointers in TaskPack
   // Pre-prod (model-bearing)
-  'MRM-VALIDATION',     // Independent validation per OSFI E-23 + SR 26-2
+  'model-governance-VALIDATION',     // Independent validation per OSFI E-23 + SR 26-2
   'APPROVED-USE',       // Use case in approved-uses list
   // Post-prod
   'SLO-IN-BUDGET',      // Error budget not burning faster than threshold
@@ -877,7 +877,7 @@ const evidenceGate: GateFn = async (ctx) => {
 };
 
 /**
- * MRM-VALIDATION: ENFORCED. Tier-1 modules MUST have a signed
+ * model-governance-VALIDATION: ENFORCED. Tier-1 modules MUST have a signed
  * ValidationRecord with conclusion in {approved, approved-with-conditions}
  * and zero open critical/high findings (per OSFI E-23 §III.B + SR 26-2 §V).
  *
@@ -893,19 +893,19 @@ const evidenceGate: GateFn = async (ctx) => {
  */
 const mrmValidationGate: GateFn = async (ctx) => {
   const t0 = Date.now();
-  if (!ctx.module_id) return fail('MRM-VALIDATION', 'No module_id', Date.now() - t0);
+  if (!ctx.module_id) return fail('model-governance-VALIDATION', 'No module_id', Date.now() - t0);
   const intake = readIntake(ctx.module_id);
-  if (!intake) return fail('MRM-VALIDATION', 'No intake', Date.now() - t0);
-  if (intake.risk_tier !== 'tier-1') return pass('MRM-VALIDATION', `Skipped for tier=${intake.risk_tier}`, Date.now() - t0);
+  if (!intake) return fail('model-governance-VALIDATION', 'No intake', Date.now() - t0);
+  if (intake.risk_tier !== 'tier-1') return pass('model-governance-VALIDATION', `Skipped for tier=${intake.risk_tier}`, Date.now() - t0);
   // Step 1: validator_owner.person assigned (not a TBD-* placeholder)
   const vp = intake.owners.validator_owner.person;
   if (!vp || vp.startsWith('TBD-')) {
-    return fail('MRM-VALIDATION', `Tier-1 needs validator_owner.person; current="${vp ?? '(unset)'}". Run auto:intake --amend after assigning.`, Date.now() - t0);
+    return fail('model-governance-VALIDATION', `Tier-1 needs validator_owner.person; current="${vp ?? '(unset)'}". Run auto:intake --amend after assigning.`, Date.now() - t0);
   }
   // Step 2: validationGate
   const v = validationGate(ctx.module_id);
-  if (!v.pass) return fail('MRM-VALIDATION', v.reason, Date.now() - t0);
-  return pass('MRM-VALIDATION', v.reason, Date.now() - t0, {
+  if (!v.pass) return fail('model-governance-VALIDATION', v.reason, Date.now() - t0);
+  return pass('model-governance-VALIDATION', v.reason, Date.now() - t0, {
     evidence_path: v.signed_validation_id ? `validation/${ctx.module_id}/${v.signed_validation_id}.json` : undefined,
   });
 };
@@ -1221,7 +1221,7 @@ export const GATES: Record<HardGateId, GateFn> = {
   'CANARY-SMOKE': canarySmokeGate,
   'OBSERVABILITY-LIVE': observabilityGate,
   'EVIDENCE-COMPLETE': evidenceGate,
-  'MRM-VALIDATION': mrmValidationGate,
+  'model-governance-VALIDATION': mrmValidationGate,
   'APPROVED-USE': approvedUseGate,
   'SLO-IN-BUDGET': sloBudgetGate,
   'DRIFT-DETECTION': driftGate,
@@ -1236,7 +1236,7 @@ export const STAGE_GATES: Record<string, HardGateId[]> = {
   'pre-code': ['INTAKE-APPROVED', 'REQ-TRACE', 'RISK-TIER', 'THREAT-MODEL', 'CONTROL-MAP', 'DATA-LINEAGE', 'APPROVED-USE'],
   'during-code': ['TYPECHECK', 'LINT', 'SAST', 'SECRETS-SCAN', 'UNIT-TESTS'],
   'pre-merge': ['INTEGRATION-TESTS', 'CDC-CONTRACTS', 'MIGRATION-DRYRUN', 'COVERAGE-90', 'SBOM', 'LICENSE-COMPLIANCE', 'IAC-SCAN', 'SCHEMA-COMPAT', 'EVIDENCE-COMPLETE', 'SUPPLY-CHAIN'],
-  'pre-prod': ['PERF-SLO', 'DR-DRILL', 'CANARY-SMOKE', 'OBSERVABILITY-LIVE', 'MRM-VALIDATION', 'AUDIT-TRAIL'],
+  'pre-prod': ['PERF-SLO', 'DR-DRILL', 'CANARY-SMOKE', 'OBSERVABILITY-LIVE', 'model-governance-VALIDATION', 'AUDIT-TRAIL'],
   'post-prod': ['SLO-IN-BUDGET', 'DRIFT-DETECTION', 'INCIDENT-RUNBOOK'],
 };
 

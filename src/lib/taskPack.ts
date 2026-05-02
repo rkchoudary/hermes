@@ -75,9 +75,9 @@ export type JobMode = z.infer<typeof JobMode>;
  *   - low: docs/comments/dev-only tooling
  *   - medium: app code outside finance/auth (default)
  *   - high: schemas/infra/deps/secrets/public APIs (manual approval)
- *   - finance-critical: NII/ECL/Capital/Liquidity/FTP/profitability/regulatory
+ *   - critical: balance-sheet/credit-loss/capital/liquidity/funding/profitability/regulatory
  */
-export const RiskClass = z.enum(['low', 'medium', 'high', 'finance-critical']);
+export const RiskClass = z.enum(['low', 'medium', 'high', 'critical']);
 export type RiskClass = z.infer<typeof RiskClass>;
 
 // ─── Sub-schemas ────────────────────────────────────────────────────────────
@@ -615,7 +615,7 @@ export const TaskPack = z.object({
    * principal who reviewed (auto:consensus dispatcher per round), and each
    * principal who approved (auto:land/auto:promote runner). Used by
    * enforceSoD() in src/lib/sod.ts to refuse same-principal review/approve
-   * transitions per SOX/SR-11/7. Default = empty (legacy task packs work
+   * transitions per SOX/generic-model-governance. Default = empty (legacy task packs work
    * unchanged; SoD enforcement only kicks in once identities are captured).
    */
   actors: Actors.default({ creator: undefined, reviewers: [], approvers: [] }),

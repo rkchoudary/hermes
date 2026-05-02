@@ -23,7 +23,7 @@
  * Caps (per Codex):
  *   - soft (warn): 10-12 calls
  *   - hard (block): 20 calls
- *   - override (with typed rationale + audit): 30 calls (finance-critical)
+ *   - override (with typed rationale + audit): 30 calls (critical)
  *
  * Override path: caller passes --budget-override "reason" to auto:work
  * or auto:consensus; reason recorded in _override-audit.jsonl.
@@ -36,7 +36,7 @@ export interface LlmBudgetPolicy {
   /** Block threshold; dispatch refused without --budget-override. */
   hard_cap: number;
   /** Override threshold; dispatch refused even with --budget-override unless
-   *  pack.risk_class === 'finance-critical'. */
+   *  pack.risk_class === 'critical'. */
   override_cap: number;
 }
 
@@ -106,7 +106,7 @@ export function evaluateLlmBudget(
 ): BudgetEvaluation {
   const used = countLlmCallsForTask(pack);
   const total = used + planned_calls;
-  const isFinanceCritical = pack.risk_class === 'finance-critical';
+  const isFinanceCritical = pack.risk_class === 'critical';
 
   // Within soft cap — proceed silently
   if (total <= policy.soft_cap) {
@@ -150,12 +150,12 @@ export function evaluateLlmBudget(
     };
   }
 
-  // Above override cap — only finance-critical packs can proceed, with rationale
+  // Above override cap — only critical packs can proceed, with rationale
   if (!isFinanceCritical) {
     return {
       mode: 'override-denied',
       used, planned: planned_calls, total_after_dispatch: total, policy,
-      reason: `OVERRIDE DENIED: ${total} calls > override_cap ${policy.override_cap}. Only risk_class=finance-critical packs may exceed override_cap (current pack risk_class=${pack.risk_class}). Stop and reassess phase scope.`,
+      reason: `OVERRIDE DENIED: ${total} calls > override_cap ${policy.override_cap}. Only risk_class=critical packs may exceed override_cap (current pack risk_class=${pack.risk_class}). Stop and reassess phase scope.`,
       proceed: false,
       override_required: true,
     };
@@ -172,7 +172,7 @@ export function evaluateLlmBudget(
   return {
     mode: 'override-required',
     used, planned: planned_calls, total_after_dispatch: total, policy,
-    reason: `EXCEPTIONAL OVERRIDE: ${total} calls > override_cap ${policy.override_cap} for finance-critical pack; rationale: "${overrideReason}". Dispatch proceeds (audited at exceptional level).`,
+    reason: `EXCEPTIONAL OVERRIDE: ${total} calls > override_cap ${policy.override_cap} for critical pack; rationale: "${overrideReason}". Dispatch proceeds (audited at exceptional level).`,
     proceed: true,
     override_required: true,
   };

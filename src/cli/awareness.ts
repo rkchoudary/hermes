@@ -110,7 +110,7 @@ function refreshObsidianState(partial?: string): void {
     const cmd = `find ${OBSIDIAN_VAULT}/FRDs -maxdepth 1 -type d -name "${filter}" | sort`;
     const dirs = execSync(cmd, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
     for (const dir of dirs) {
-      const moduleId = path.basename(dir).match(/^FRD-(M\d+|FPA-MOD-\d+|FPA-ENT-\w+)/)?.[1] ?? 'unknown';
+      const moduleId = path.basename(dir).match(/^FRD-(M\d+|MOD-\d+|[A-Z]+-\d+)/)?.[1] ?? 'unknown';
       const frdMd = path.join(dir, `FRD-${moduleId}.md`);
       if (!fs.existsSync(frdMd)) continue;
 

@@ -72,7 +72,7 @@ DATA:
 ${entries.map(e => JSON.stringify(e)).join('\n')}
 
 TASK: Identify 2-4 actionable patterns that future workers could use to AVOID the failure modes seen here. Output as a markdown list, ≤200 words total. Examples:
-  - "Modules referencing >3 OSFI citations need 2 patches on average — don't truncate AC token coverage"
+  - "Modules referencing >3 compliance citations need 2 patches on average — don't truncate AC token coverage"
   - "Tier-1 modules with reciprocity to M02 always need cognitive recovery — scope reciprocity §13 first"
 
 Be concrete and brief. Output ONLY the markdown list.`;

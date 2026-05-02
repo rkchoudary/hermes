@@ -5,7 +5,7 @@
  * Engines:
  *   - claude-code-cli (DEFAULT) — Mode B-2: invokes `claude --print` headless from the
  *     current worktree; Anthropic Max subscription billing (~$200-600 across the full
- *     87-module portfolio). Recommended path for operators with Claude Max.
+ *     large multi-module portfolio). Recommended path for operators with Claude Max.
  *   - claude-agent-sdk          — Mode B-1: @anthropic-ai/sdk tool-use loop; per-token
  *     API billing (~$3-7K across portfolio). Use when no Max subscription.
  *   - codex-cli                 — Mode C: Codex CLI as worker; Codex per-token billing.
@@ -962,7 +962,7 @@ async function dispatchClaudeAgentSdk(
       output_path: '',
       exit_code: null,
       duration_ms: 0,
-      error: `@anthropic-ai/sdk is not installed. Run: pnpm install --filter @nbf/autonomous-delivery (it is an optionalDependency). Detail: ${(e as Error).message}`,
+      error: `@anthropic-ai/sdk is not installed. Run: pnpm install --filter hermes-harness (it is an optionalDependency). Detail: ${(e as Error).message}`,
     };
   }
 
@@ -1554,7 +1554,7 @@ async function main() {
   }
 
   // ── PUB-10: MODEL INVENTORY + CHANGE-CONTROL PREFLIGHT ────────────────────
-  // SR-11/7 (Model Risk Management) requires every model touching a banking
+  // generic-model-governance (Model Risk Management) requires every model touching a banking
   // change to be on the qualified inventory, with audit trail of approval.
   // Refuses dispatch if the resolved engine+model is not qualified for the
   // 'impl-worker' role. Like the API-billing preflight, runs before any task

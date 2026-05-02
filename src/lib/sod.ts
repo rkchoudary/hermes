@@ -5,9 +5,9 @@
  *   "Segregation-of-Duties (SoD) enforcement — task-pack creator ≠ reviewer ≠
  *    landing-approver; identity captured in evidence; policy-as-code matrix"
  *
- * Required for SOX (ICFR), SR-11/7 (model risk), SOC-2 (operational controls)
+ * Required for SOX (ICFR), generic-model-governance (model risk), SOC-2 (operational controls)
  * compliance. Without this, a single principal can author code, review it, and
- * land it to production — a classic SoD violation that flunks any banking audit.
+ * land it to production — a classic SoD violation that flunks any regulated-industry audit.
  *
  * Phase 1 scope:
  *   - Identity schema: name + email + source + captured_at
@@ -152,7 +152,7 @@ export function enforceSoD(
     if (policy.creator_differs_from_reviewer && actors.creator && identityKey(actors.creator) === inKey) {
       return {
         ok: false,
-        reason: `SoD violation: reviewer '${incoming.name}' is the task creator. Per SOX/SR-11/7, reviewer must differ from creator.`,
+        reason: `SoD violation: reviewer '${incoming.name}' is the task creator. Per SOX/generic-model-governance, reviewer must differ from creator.`,
         remediation: `Either dispatch consensus from a different operator/host, OR set AUTO_ACTOR_OVERRIDE to a distinct principal, OR human-override with --reason citing the policy exception.`,
       };
     }
@@ -161,7 +161,7 @@ export function enforceSoD(
     if (policy.creator_differs_from_approver && actors.creator && identityKey(actors.creator) === inKey) {
       return {
         ok: false,
-        reason: `SoD violation: approver '${incoming.name}' is the task creator. Per SOX/SR-11/7, approver must differ from creator.`,
+        reason: `SoD violation: approver '${incoming.name}' is the task creator. Per SOX/generic-model-governance, approver must differ from creator.`,
         remediation: `Have a different operator run auto:land/auto:promote, OR human-override with --reason.`,
       };
     }
@@ -170,7 +170,7 @@ export function enforceSoD(
         if (identityKey(r) === inKey) {
           return {
             ok: false,
-            reason: `SoD violation: approver '${incoming.name}' was already a reviewer for this task. Per SOX/SR-11/7, no principal may both review and approve.`,
+            reason: `SoD violation: approver '${incoming.name}' was already a reviewer for this task. Per SOX/generic-model-governance, no principal may both review and approve.`,
             remediation: `Have a different operator approve, OR human-override with --reason.`,
           };
         }

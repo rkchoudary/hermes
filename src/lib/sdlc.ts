@@ -112,7 +112,7 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     description: 'FRD signed-off; ratify ADRs + threat model + control mapping',
     required_gate_ids: ['REQ-TRACE', 'CONTROL-MAP', 'DATA-LINEAGE'],
     required_evidence: ['frd/v1.0-candidate.md', 'adr/'],
-    required_approver_roles: [{ role: 'Domain-PM', count: 1 }, { role: 'MRM-Lead', count: 1 }],
+    required_approver_roles: [{ role: 'Domain-PM', count: 1 }, { role: 'model-governance-Lead', count: 1 }],
     tier_1_only_gates: ['THREAT-MODEL'],
   },
   {
@@ -146,15 +146,15 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     required_gate_ids: ['SAST', 'SECRETS-SCAN', 'SBOM', 'LICENSE-COMPLIANCE', 'IAC-SCAN', 'SCHEMA-COMPAT', 'EVIDENCE-COMPLETE'],
     required_evidence: ['evidence/sbom.json', 'evidence/sast-report.sarif'],
     required_approver_roles: [],
-    tier_1_only_gates: ['MRM-VALIDATION', 'APPROVED-USE'],
+    tier_1_only_gates: ['model-governance-VALIDATION', 'APPROVED-USE'],
   },
   {
     from: 'validation-approved',
     to: 'release-readiness',
     description: 'Independent validator signed; advance to operability gates',
-    required_gate_ids: ['MRM-VALIDATION'],
+    required_gate_ids: ['model-governance-VALIDATION'],
     required_evidence: ['validation/independent-report.md'],
-    required_approver_roles: [{ role: 'MRM-Independent-Validator', count: 1 }],
+    required_approver_roles: [{ role: 'model-governance-Independent-Validator', count: 1 }],
   },
   {
     from: 'release-readiness',
@@ -180,7 +180,7 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     required_gate_ids: ['CANARY-SMOKE', 'PERF-SLO'],
     required_evidence: ['canary-metrics.json'],
     required_approver_roles: [{ role: 'Eng-Lead', count: 1 }],
-    tier_1_only_gates: ['MRM-VALIDATION'],
+    tier_1_only_gates: ['model-governance-VALIDATION'],
     irreversible_op: 'production-model-use-expansion',
   },
   {
@@ -205,7 +205,7 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     description: 'Incident remediation complete; return to steady-state',
     required_gate_ids: ['SLO-IN-BUDGET', 'INCIDENT-RUNBOOK'],
     required_evidence: ['incident/post-mortem.md'],
-    required_approver_roles: [{ role: 'Eng-Lead', count: 1 }, { role: 'MRM-Lead', count: 1 }],
+    required_approver_roles: [{ role: 'Eng-Lead', count: 1 }, { role: 'model-governance-Lead', count: 1 }],
   },
   {
     from: 'observe',
@@ -216,7 +216,7 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     required_approver_roles: [
       { role: 'CRO', count: 1 },
       { role: 'Controller', count: 1 },
-      { role: 'MRM-Lead', count: 1 },
+      { role: 'model-governance-Lead', count: 1 },
     ],
     irreversible_op: 'production-model-retirement',
   },
@@ -226,7 +226,7 @@ export const TRANSITIONS: readonly StageTransitionPolicy[] = [
     description: 'PIR; lessons learned; close model file',
     required_gate_ids: ['AUDIT-TRAIL'],
     required_evidence: ['pir/lessons-learned.md'],
-    required_approver_roles: [{ role: 'MRM-Lead', count: 1 }],
+    required_approver_roles: [{ role: 'model-governance-Lead', count: 1 }],
   },
 ];
 

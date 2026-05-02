@@ -19,7 +19,7 @@
  *
  * RULE-2 anti-pattern denylist — regex-match the FRD against known
  *   bad-patterns:
- *   - OSFI-INVALID-PINCITE: `§IV(\(|\b)|§V\(|§VI(\(|\b)|§VII(\b)` in OSFI E-23 context
+ *   - compliance-INVALID-PINCITE: `§IV(\(|\b)|§V\(|§VI(\(|\b)|§VII(\b)` in OSFI E-23 context
  *   - DEAD-AI-ROUTE: claims about /api/ai/{chat,scenario/build,variance-commentary,
  *     audit-log,flags} as if shipped (these don't exist at SHA 946257e)
  *   - PRESENT-STATE-OUTBOX: "outbox" or "Iceberg" without the "target-state" /
@@ -234,7 +234,7 @@ function ruleFileAnchorExistence(frd: string, codeRoot: string): Finding[] {
 function ruleAntiPatterns(frd: string): Finding[] {
   const findings: Finding[] = [];
 
-  // OSFI-INVALID-PINCITE: §IV / §V( / §VI / §VII in any context
+  // compliance-INVALID-PINCITE: §IV / §V( / §VI / §VII in any context
   const osfiBadRe = /§IV[\s(\b]|§V\(|§VI[\s(\b]|§VII\b/g;
   let match: RegExpExecArray | null;
   while ((match = osfiBadRe.exec(frd)) !== null) {
@@ -243,7 +243,7 @@ function ruleAntiPatterns(frd: string): Finding[] {
     const lastHeader = before.match(/(?:^|\n)#{1,4}\s+([^\n]+)$/m);
     const section = lastHeader ? lastHeader[1].trim() : '<unknown>';
     findings.push({
-      rule: 'RULE-2 OSFI-INVALID-PINCITE',
+      rule: 'RULE-2 compliance-INVALID-PINCITE',
       severity: 'high',
       location: `§ ${section} (char offset ${match.index})`,
       detail: `Invalid OSFI E-23 pin-cite notation \`${match[0]}\` — final guideline uses C.2 / C.3 / Appendix 1 only`,

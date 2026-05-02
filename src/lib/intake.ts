@@ -24,7 +24,7 @@ import { harnessRoot } from './harnessRoot';
 // ─── Risk tiering per OSFI E-23 §III.A + SR 26-2 §III ──────────────────────
 export const RiskTier = z.enum([
   'tier-1', // Material to capital, liquidity, regulatory submission, customer-facing pricing
-  'tier-2', // Internal use, FP&A planning, non-regulatory analytics
+  'tier-2', // Internal use, internal-use planning, non-regulatory analytics
   'tier-3', // Dev tools, internal dashboards, non-financial
   'not-a-model', // Pure passthrough / data-plumbing (no judgment, no learned parameters)
 ]);
@@ -32,10 +32,10 @@ export type RiskTier = z.infer<typeof RiskTier>;
 
 // ─── Model classification ──────────────────────────────────────────────────
 export const ModelClassification = z.enum([
-  'regulatory-model',     // Direct regulatory submission (CCAR, Basel, COREP, BCAR, OSFI submissions)
-  'mrm-tier-1-internal',  // Internal model, MRM Tier-1 governance applies
-  'mrm-tier-2-internal',  // Internal model, MRM Tier-2 governance applies
-  'mrm-tier-3-internal',  // Internal model, MRM Tier-3 governance applies
+  'regulatory-model',     // Direct regulatory submission (CCAR, Basel, COREP, BCAR, compliance submissions)
+  'mrm-tier-1-internal',  // Internal model, model-governance Tier-1 governance applies
+  'mrm-tier-2-internal',  // Internal model, model-governance Tier-2 governance applies
+  'mrm-tier-3-internal',  // Internal model, model-governance Tier-3 governance applies
   'analytics-tool',       // Not a model per SR 26-2; analytics/visualization only
   'data-pipeline',        // Data movement, no model behavior
   'ui-component',         // UI primitive, no business logic
@@ -59,7 +59,7 @@ export const DataClassification = z.enum([
   'confidential',
   'restricted',
   'npi',     // Non-public personal information (GLBA)
-  'phi',     // Protected health information (HIPAA — rare in FP&A but possible for benefits)
+  'phi',     // Protected health information (HIPAA)
   'pci',     // Payment card industry data
   'mnpi',    // Material non-public information (insider trading)
 ]);
@@ -71,7 +71,7 @@ export const ApprovedUse = z.object({
   description: z.string(),
   jurisdiction: z.array(z.enum(['US', 'CA', 'EU', 'UK', 'global'])),
   effective_date: z.string().optional(), // ISO date when use was approved
-  approver_role: z.enum(['CRO', 'CCO', 'Controller', 'CFO', 'CIO', 'MRM-Lead', 'Compliance-Lead', 'Domain-PM']),
+  approver_role: z.enum(['CRO', 'CCO', 'Controller', 'CFO', 'CIO', 'model-governance-Lead', 'Compliance-Lead', 'Domain-PM']),
   approver_id: z.string().optional(), // Filled in when human signs
   approval_evidence_pointer: z.string().optional(), // Path to signed artifact
 });
@@ -117,7 +117,7 @@ export const OwnerAssignment = z.object({
   validator_owner: z.object({
     role: z.string(), // Independent of build team per OSFI E-23
     person: z.string().optional(),
-    accountability_scope: z.string(), // e.g., "Independent validation, MRM signoff"
+    accountability_scope: z.string(), // e.g., "Independent validation, model-governance signoff"
   }),
   control_owner: z.object({
     role: z.string(), // SOX control owner

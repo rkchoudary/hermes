@@ -8,7 +8,7 @@
  * regulatory keyword set and surfaces missing controls.
  *
  * Phase 2 will add: BCBS-239 control matrix mapping (not just keywords),
- * SOX/SR-11/7 cross-check, automated SBOM scan via Semgrep + OWASP,
+ * SOX/generic-model-governance cross-check, automated SBOM scan via Semgrep + OWASP,
  * threat-model template integration.
  */
 import * as fs from 'node:fs';
@@ -44,8 +44,8 @@ function parseArgs(argv: string[]): Args {
 const COMPLIANCE_KEYWORDS = {
   sox: ['SOX', 'segregation of duties', 'SoD', 'audit trail', 'control'],
   bcbs239: ['BCBS-239', 'risk data aggregation', 'lineage', 'frozen snapshot', 'immutable'],
-  sr_11_7: ['SR-11/7', 'model risk', 'model validation', 'challenger model'],
-  ifrs_9: ['IFRS-9', 'ECL', 'expected credit loss', 'SICR', 'stage transition'],
+  sr_11_7: ['generic-model-governance', 'model risk', 'model validation', 'challenger model'],
+  ifrs_9: ['IFRS 9', 'ECL', 'expected credit loss', 'SICR', 'stage transition'],
   pii: ['PII', 'PHI', 'GDPR', 'CCPA', 'privacy', 'redaction'],
   authn_authz: ['authentication', 'authorization', 'RBAC', 'ABAC', 'JWT', 'session token'],
 };
@@ -98,7 +98,7 @@ function main(): void {
     };
   }
 
-  // For regulated workloads: SOX + BCBS-239 + SR-11/7 are CRITICAL.
+  // For regulated workloads: SOX + BCBS-239 + generic-model-governance are CRITICAL.
   // Missing = high severity.
   const CRITICAL = ['sox', 'bcbs239', 'sr_11_7'];
   const missing = CRITICAL.filter((f) => coverage[f].keywords_found.length === 0);
@@ -116,7 +116,7 @@ function main(): void {
     recommendations.push(`risk-register.md is suspiciously small (${riskRegisterSize}b). Likely shallow analysis.`);
   }
   for (const fw of missing) {
-    recommendations.push(`No mention of ${fw.toUpperCase()} controls in risk-register. For banking modules this MUST be addressed.`);
+    recommendations.push(`No mention of ${fw.toUpperCase()} controls in risk-register. For compliance-sensitive modules this MUST be addressed.`);
   }
   if (!fs.existsSync(duplicateScanPath)) {
     recommendations.push(`duplicate-scan.json missing. Operator: enforce in worker prompt.`);

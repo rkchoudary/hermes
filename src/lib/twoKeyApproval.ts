@@ -27,7 +27,7 @@ import { harnessRoot } from './harnessRoot';
 // ─── Operation classification ──────────────────────────────────────────────
 export const IrreversibleOp = z.enum([
   'data-deletion',                  // Bulk delete from prod tables; data destruction
-  'regulatory-filing',              // External submission to OSFI, Fed, EBA, FCA, etc.
+  'regulatory-filing',              // External submission to compliance, Fed, EBA, FCA, etc.
   'financial-restatement',          // Material change to prior-period financials
   'customer-pricing-change',        // Pricing rule change affecting customer billing
   'capital-output-change',          // Material change to capital ratio / RWA / TLAC output
@@ -53,7 +53,7 @@ export const ApproverRole = z.enum([
   'CIO',                  // Chief Information Officer
   'CISO',                 // Chief Information Security Officer
   'GeneralCounsel',
-  'MRM-Lead',             // Model Risk Management Lead (independent of build per OSFI E-23)
+  'model-governance-Lead',             // Model Risk Management Lead (independent of build per OSFI E-23)
   'Compliance-Lead',
   'Domain-PM',            // Module business owner
   'Eng-Lead',             // Module technical owner
@@ -74,7 +74,7 @@ export interface ApprovalRequirement {
   no_self_approval: boolean;
   // Whether legal attestation is required (e.g., regulatory filings)
   requires_legal_attestation: boolean;
-  // Whether MRM signoff is required (model-bearing ops)
+  // Whether model-governance signoff is required (model-bearing ops)
   requires_mrm_signoff: boolean;
   // Whether dry-run evidence must be collected before approval
   requires_dry_run: boolean;
@@ -100,7 +100,7 @@ export const APPROVAL_REQUIREMENTS: Record<IrreversibleOp, ApprovalRequirement> 
     required_role_groups: [['Controller'], ['Reg-Affairs-Lead'], ['CCO', 'Compliance-Lead']],
     no_self_approval: true,
     requires_legal_attestation: true, // External submission requires legal sign-off
-    requires_mrm_signoff: true,       // Models feeding the submission must be MRM-validated
+    requires_mrm_signoff: true,       // Models feeding the submission must be model-governance-validated
     requires_dry_run: true,
     requires_blast_radius: false,     // External; not internal blast
     requires_rollback_plan: false,    // External submissions are immutable once filed
@@ -127,7 +127,7 @@ export const APPROVAL_REQUIREMENTS: Record<IrreversibleOp, ApprovalRequirement> 
   },
   'capital-output-change': {
     min_approvals: 3,
-    required_role_groups: [['CRO'], ['Controller', 'CFO'], ['MRM-Lead']],
+    required_role_groups: [['CRO'], ['Controller', 'CFO'], ['model-governance-Lead']],
     no_self_approval: true,
     requires_legal_attestation: false,
     requires_mrm_signoff: true,
@@ -137,7 +137,7 @@ export const APPROVAL_REQUIREMENTS: Record<IrreversibleOp, ApprovalRequirement> 
   },
   'liquidity-output-change': {
     min_approvals: 3,
-    required_role_groups: [['CRO'], ['Controller', 'CFO'], ['MRM-Lead']],
+    required_role_groups: [['CRO'], ['Controller', 'CFO'], ['model-governance-Lead']],
     no_self_approval: true,
     requires_legal_attestation: false,
     requires_mrm_signoff: true,
@@ -147,7 +147,7 @@ export const APPROVAL_REQUIREMENTS: Record<IrreversibleOp, ApprovalRequirement> 
   },
   'production-model-use-expansion': {
     min_approvals: 3,
-    required_role_groups: [['MRM-Lead'], ['Domain-PM'], ['CRO', 'Compliance-Lead']],
+    required_role_groups: [['model-governance-Lead'], ['Domain-PM'], ['CRO', 'Compliance-Lead']],
     no_self_approval: true,
     requires_legal_attestation: false,
     requires_mrm_signoff: true,
@@ -157,7 +157,7 @@ export const APPROVAL_REQUIREMENTS: Record<IrreversibleOp, ApprovalRequirement> 
   },
   'production-model-retirement': {
     min_approvals: 2,
-    required_role_groups: [['MRM-Lead'], ['Domain-PM']],
+    required_role_groups: [['model-governance-Lead'], ['Domain-PM']],
     no_self_approval: true,
     requires_legal_attestation: false,
     requires_mrm_signoff: true,
@@ -307,7 +307,7 @@ export function approvalGate(requestId: string): ApprovalGateResult {
   if (required.requires_blast_radius && !req.blast_radius_report_path) prereqs.push('blast-radius report');
   if (required.requires_rollback_plan && !req.rollback_plan_path) prereqs.push('rollback plan');
   if (required.requires_legal_attestation && !req.legal_attestation_path) prereqs.push('legal attestation');
-  if (required.requires_mrm_signoff && !req.mrm_signoff_path) prereqs.push('MRM signoff');
+  if (required.requires_mrm_signoff && !req.mrm_signoff_path) prereqs.push('model-governance signoff');
 
   if (prereqs.length > 0) {
     return {

@@ -6,8 +6,8 @@
  *    system_prompt_hash + tool_versions per dispatch; new model versions
  *    require qualification before promotion"
  *
- * Required for SR-11/7 (model risk management) compliance: every model that
- * touches a banking change must be on the qualified list, with audit trail
+ * Required for generic-model-governance (model governance) compliance: every model that
+ * touches a compliance-sensitive change must be on the qualified list, with audit trail
  * of who approved it and why.
  *
  * Phase 1 scope:
@@ -61,7 +61,7 @@ export type QualifiedModel = z.infer<typeof QualifiedModel>;
 export const ModelInventory = z.object({
   schema_version: z.literal('1').default('1'),
   models: z.array(QualifiedModel),
-  /** When true, non-qualified models refuse dispatch. Default true (SR-11/7). */
+  /** When true, non-qualified models refuse dispatch. Default true (generic-model-governance). */
   enforce: z.boolean().default(true),
   /** Last operator review of the inventory (audit cadence). */
   last_reviewed_at: z.string().optional(),
@@ -121,8 +121,8 @@ export function isQualified(
   model_version?: string
 ): QualificationCheck {
   if (!inventory) {
-    // R7 fix: missing inventory is now FAIL-CLOSED, not warn-open. SR-11/7
-    // requires every model touching a banking change to be on the qualified
+    // R7 fix: missing inventory is now FAIL-CLOSED, not warn-open. generic-model-governance
+    // requires every model touching a compliance-sensitive change to be on the qualified
     // list; "no list = ok" is exactly the gap PUB-10 was supposed to close.
     // Operator opts in via `pnpm auto:model init` (one-time bootstrap) or
     // sets AUTO_MODEL_INVENTORY_BYPASS=1 + AUTO_MODEL_INVENTORY_BYPASS_REASON
@@ -145,7 +145,7 @@ export function isQualified(
     return {
       ok: false,
       reason:
-        'No inventory file at .agent-runs/_model-inventory.json. SR-11/7 requires qualification before dispatch. ' +
+        'No inventory file at .agent-runs/_model-inventory.json. generic-model-governance requires qualification before dispatch. ' +
         'Run `pnpm auto:model init` to bootstrap, or set AUTO_MODEL_INVENTORY_BYPASS=1 + AUTO_MODEL_INVENTORY_BYPASS_REASON="…" for emergency dispatch.',
     };
   }
@@ -170,14 +170,14 @@ export function isQualified(
     reason:
       `model ${engine}/${model_id}${model_version ? `@${model_version}` : ''} is NOT in the qualified inventory. ` +
       `Either: (a) qualify it explicitly via pnpm auto:model qualify, ` +
-      `(b) set inventory.enforce=false to opt out (NOT recommended for SR-11/7 scope), or ` +
+      `(b) set inventory.enforce=false to opt out (NOT recommended for generic-model-governance scope), or ` +
       `(c) re-dispatch with a qualified model.`,
   };
 }
 
 /**
  * Default inventory — pre-populated with the models in active use today.
- * Operators must update last_reviewed_* on ratification per SR-11/7 cadence.
+ * Operators must update last_reviewed_* on ratification per generic-model-governance cadence.
  */
 export function defaultInventory(): ModelInventory {
   const at = new Date().toISOString();

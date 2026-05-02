@@ -3,7 +3,7 @@
  *
  * OSFI E-23 §III.B + Fed SR 26-2 §V: model validation must be performed by
  * a validator with NO build authority. The validator may be inside the
- * organization (independent function within MRM) or external; they MUST be
+ * organization (independent function within model-governance) or external; they MUST be
  * organizationally separate from the model build team.
  *
  * Per FRD-HARNESS v0.9 §2.1: Codex is an advisory peer-reviewer, NOT an
@@ -34,7 +34,7 @@ import { readIntake } from './intake';
 
 // ─── Validator role (must be human, must be independent) ──────────────────
 export const ValidatorRole = z.enum([
-  'mrm-independent-validator',  // Internal MRM staff, organizationally separate
+  'mrm-independent-validator',  // Internal model-governance staff, organizationally separate
   'external-validator',          // Third-party validator (consultancy, auditor)
   'second-line-control',         // Second-line risk function (CRO chain)
   'audit-internal',              // Internal Audit (third line)
@@ -412,7 +412,7 @@ export function signValidation(req: SignValidationRequest): SignValidationResult
   return { ok: true, record: signed };
 }
 
-// ─── Validation gate (used by hardGates.MRM-VALIDATION) ────────────────────
+// ─── Validation gate (used by hardGates.model-governance-VALIDATION) ────────────────────
 export interface ValidationGateResult {
   pass: boolean;
   reason: string;
@@ -422,7 +422,7 @@ export interface ValidationGateResult {
 }
 
 /**
- * Validation gate for hardGates.MRM-VALIDATION. Returns pass=true iff the
+ * Validation gate for hardGates.model-governance-VALIDATION. Returns pass=true iff the
  * module has at least one SIGNED validation record with conclusion in
  * {approved, approved-with-conditions} AND zero open critical/high
  * findings AND independence still holds.

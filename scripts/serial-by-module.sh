@@ -114,7 +114,7 @@ approve_intake_for_tier() {
     tier-1)
       pnpm auto:intake --module "$mod" --approve --as Domain-PM     --as-id "${HERMES_OPERATOR:-operator}" >/dev/null 2>&1 || true
       pnpm auto:intake --module "$mod" --approve --as CIO           --as-id "${HERMES_OPERATOR:-operator}" >/dev/null 2>&1 || true
-      pnpm auto:intake --module "$mod" --approve --as MRM-Lead      --as-id "${HERMES_OPERATOR:-operator}" >/dev/null 2>&1 || true
+      pnpm auto:intake --module "$mod" --approve --as model-governance-Lead      --as-id "${HERMES_OPERATOR:-operator}" >/dev/null 2>&1 || true
       pnpm auto:intake --module "$mod" --approve --as Compliance-Lead --as-id "${HERMES_OPERATOR:-operator}" >/dev/null 2>&1 || true
       ;;
     tier-2)
@@ -482,8 +482,8 @@ drive_module() {
       --frd-version "0.5" \
       --methodology conceptual-soundness \
       --conclusion approved-with-conditions \
-      --rationale "Solo-operator pre-customer phase; Ram-as-validator per accepts_full_autonomy=true. Day-2 transition will replace with named distinct human MRM-Independent before first regulated bank customer." \
-      --attestation-text "I attest to independent validation per operator's compliance framework (SOX/OSFI/SR-11-7/etc as applicable)" \
+      --rationale "Solo-operator pre-customer phase; Ram-as-validator per accepts_full_autonomy=true. Day-2 transition will replace with named distinct human model-governance-Independent before first regulated bank customer." \
+      --attestation-text "I attest to independent validation per operator's compliance framework (SOX/compliance/generic-model-governance/etc as applicable)" \
       --no-build-authority --no-supervisory-relation \
       >/tmp/serial-${mod}-validation.log 2>&1 || val_rc=$?
     if [ $val_rc -eq 0 ]; then
@@ -676,7 +676,7 @@ cleanup_resources() {
   fi
   # Prune worktrees whose branches are merged into origin/main (Stage 28
   # leaves the branch checked out; once merged, the worktree is dead weight).
-  # 86-module run accumulates ~170 worktrees if not pruned.
+  # long-running multi-module run can accumulate many worktrees if not pruned.
   local repo_root pruned=0
   repo_root="${HERMES_PROJECT_ROOT:-$PWD}"
   git -C "$repo_root" fetch origin main --quiet 2>/dev/null || true

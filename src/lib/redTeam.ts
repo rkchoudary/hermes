@@ -31,7 +31,7 @@ export type BlueTeamAgent =
   | 'verify-claims'    // AC fabrication detector
   | 'conflict-detect'  // M5: symbol overlap + high-impact paths
   | 'drift-check'      // M7: FRD↔code drift
-  | 'security-check'   // M8: BCBS-239/SOX/SR-11/7/IFRS-9/PII keyword scan
+  | 'security-check'   // M8: BCBS-239/SOX/generic-model-governance/IFRS 9/PII keyword scan
   | 'codex-review';    // independent senior reviewer (gpt-5.5 xhigh)
 
 export type PerturbationKind =

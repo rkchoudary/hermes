@@ -120,7 +120,7 @@ function defaultModelInventory(): unknown {
         model_id: 'claude-opus-4-7',
         qualified_at: new Date().toISOString(),
         qualified_by: 'auto:onboard',
-        qualification_reason: 'Default impl-worker. Routes through Claude Code Max subscription (no API billing). REPLACE this entry with project-specific qualification rationale before SR-11/7-bound use.',
+        qualification_reason: 'Default impl-worker. Routes through Claude Code Max subscription (no API billing). REPLACE this entry with project-specific qualification rationale before generic-model-governance-bound use.',
         roles: ['impl-worker'],
       },
       {
@@ -128,7 +128,7 @@ function defaultModelInventory(): unknown {
         model_id: 'gpt-5.5',
         qualified_at: new Date().toISOString(),
         qualified_by: 'auto:onboard',
-        qualification_reason: 'Default consensus reviewer. xhigh reasoning effort. REPLACE before SR-11/7-bound use.',
+        qualification_reason: 'Default consensus reviewer. xhigh reasoning effort. REPLACE before generic-model-governance-bound use.',
         roles: ['codex-reviewer', 'consensus'],
       },
     ],
@@ -234,7 +234,7 @@ function main(): void {
   const plan: Array<{ path: string; description: string; would_write: boolean }> = [
     { path: path.join(agentRunsDir, runId, 'tasks'), description: 'tasks directory', would_write: true },
     { path: path.join(agentRunsDir, runId, 'evidence'), description: 'evidence directory', would_write: true },
-    { path: path.join(agentRunsDir, '_model-inventory.json'), description: 'default model inventory (PUB-10 SR-11/7)', would_write: !fs.existsSync(path.join(agentRunsDir, '_model-inventory.json')) || args.force },
+    { path: path.join(agentRunsDir, '_model-inventory.json'), description: 'default model inventory (PUB-10 generic-model-governance)', would_write: !fs.existsSync(path.join(agentRunsDir, '_model-inventory.json')) || args.force },
     { path: path.join(agentRunsDir, '_budget.json'), description: 'default budget contract (M9)', would_write: !fs.existsSync(path.join(agentRunsDir, '_budget.json')) || args.force },
     { path: path.join(agentRunsDir, runId, 'tasks', `TP-${today}-001.json`), description: 'sample task pack', would_write: !fs.existsSync(path.join(agentRunsDir, runId, 'tasks', `TP-${today}-001.json`)) || args.force },
   ];

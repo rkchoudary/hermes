@@ -2,9 +2,9 @@
 
 **Open-source autonomous delivery harness — multi-engine AI agents with audit-trail compliance, by default.**
 
-Hermes drives AI coding agents through a 28-stage delivery pipeline (intake → spec authoring → code-sprint → review → land → deploy) with the gates and audit trail that regulated industries actually require: SOX 404, OSFI E-23, BCBS 239, SR-11/7, GDPR. Greenfield or brownfield, single-repo or 80+ modules.
+Hermes drives AI coding agents through a 28-stage delivery pipeline (intake → spec authoring → code-sprint → review → land → deploy) with the gates and audit trail that regulated industries actually require: SOX, GDPR, HIPAA, PCI-DSS, model-governance, segregation-of-duties. Greenfield or brownfield, single-repo or many modules.
 
-Production-tested on an 87-module banking platform: 33 modules end-to-end-completed, 54 parked, zero compliance violations.
+Production-tested on a large multi-module regulated workload. Battle-tested cognitive-recovery, audit-trail, and parallel-orchestration patterns.
 
 ## Why Hermes vs. Devin
 
@@ -28,7 +28,7 @@ Production-tested on an 87-module banking platform: 33 modules end-to-end-comple
 - **9-engine adapter registry** — claude-code-cli (default), claude-agent-sdk, codex-cli, cursor-cli, aider, continue, gemini-cli, ollama, openai-cli. PATH-detected; runtime-routable. Tier-1/2/3 fallback or dynamic complexity-based routing.
 - **28-stage SDLC pipeline** — Stage 0 intake → Phase 1 FRD → Phase 2 TRD → Phase 3 Sprint Plan → Phase 4 Code-Sprint → Stages 25-28 validation/approval/tick/auto-merge → Stage 29 staging deploy. Each stage is a CLI; chain via `serial-by-module.sh` or run individually.
 - **Cognitive recovery (EXARCHON)** — when 3 patch rounds exhaust, dispatch a diagnose-then-fix-bugs worker with a *different-approach* directive. Recovers ~40% of "stuck" tasks in production.
-- **Skill memory (Hermes-Agent)** — every phase logs `(module, task_id, patch_rounds, recovered_via)` to JSONL; LLM reflection synthesizes patterns ("modules with >3 OSFI citations need 2 patches on average") which seed future worker prompts.
+- **Skill memory (Hermes-Agent)** — every phase logs `(module, task_id, patch_rounds, recovered_via)` to JSONL; LLM reflection synthesizes patterns ("modules with >3 regulatory citations need 2 patches on average") which seed future worker prompts.
 - **Council async sidecar (advisory pattern)** — codex review runs in parallel, writes verdict to JSON sidecar; non-blocking. Optional `AUTO_COUNCIL_BLOCKING=1` makes it a hard gate.
 - **CI auto-fix loop (Composio pattern)** — when merged-to-main PR's CI goes red, scan checks, dispatch claude to author a fix diff, open a fix-PR autonomously.
 - **YAML workflow runner (Archon pattern)** — define your own pipelines; minimal YAML parser; supports cmd/cmds/when/timeout/background/extract/hooks. Example: `workflows/code-sprint.yaml` (9 nodes mirroring `drive_phase`).
@@ -143,13 +143,16 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for full design.
 
 ## Compliance
 
-Hermes implements audit-trail patterns required by:
+Hermes implements audit-trail patterns useful for any regulated workload:
 
-- **SOX 404** — segregation of duties (creator ≠ reviewer ≠ approver), tamper-evident state log, override audit
-- **OSFI E-23** — independent validation memo, named-operator attestation, audit-pack archive
-- **BCBS 239** — every fact (`run_id`, `tenant_id`, `snapshot_id`, `as_of_date`), evidence directory, replay
-- **SR-11/7** — model-inventory, multi-vendor consensus (impl-vendor ≠ review-vendor), challenger reviews
-- **GDPR** — KMS-encrypted S3 archive, immutable WORM bucket, configurable retention
+- **Segregation of duties** — creator ≠ reviewer ≠ approver, enforced at the SoD module
+- **Tamper-evident state log** — every transition sha256-chained; `verifyStateLogChain()` detects tampering
+- **Override audit** — every `--force` bypass requires `AUTO_FORCE_REASON` and is appended to a chain-hashed override-audit log
+- **Multi-vendor consensus** — impl-engine ≠ review-engine option (e.g., Claude implements, Codex reviews)
+- **WORM evidence + KMS-encrypted S3 archive** — append-only, immutable, configurable retention
+- **Independent validation memo** — Stage 25 captures named-operator attestation
+- **Audit-pack archive** — Stage 27 packages all evidence per task for examiner review
+- **Maps cleanly to** — SOX 404, OSFI E-23, BCBS 239, SR-11/7, IFRS 9, GDPR, HIPAA, PCI-DSS, and internal-control taxonomies
 
 The compliance gates are *defaults*, not opt-ins. To run without them, you have to explicitly bypass with `AUTO_FORCE_REASON="<≥10 char rationale>"`, which is itself audit-logged.
 
@@ -172,4 +175,4 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 ## Status
 
-`v0.1` — public preview. Production-tested on one regulated workload (87-module banking FP&A platform). Smoke tests 22/22 pass in CI. Battle-tested patterns; documentation still maturing.
+`v0.1` — public preview. Production-tested on a regulated multi-module workload. Smoke tests 22/22 pass in CI. Battle-tested patterns; documentation still maturing.

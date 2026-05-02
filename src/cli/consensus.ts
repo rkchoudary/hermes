@@ -214,7 +214,7 @@ async function dispatchCodex(taskId: string, runId: string, bundle: string): Pro
   const harnessRootRes = harnessRoot();
 
   // PUB-10: model inventory + change-control preflight for codex-reviewer role.
-  // SR-11/7 requires the reviewer model to be on the qualified inventory.
+  // generic-model-governance requires the reviewer model to be on the qualified inventory.
   // Synchronous require via dynamic import not possible in this sync function;
   // routed through statically-imported helpers instead.
   const codexModel = process.env.CODEX_MODEL || 'gpt-5.5';
