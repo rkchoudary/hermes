@@ -1,0 +1,24 @@
+{
+  "name": "hermes-cloud",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": false,
+  "description": "Hermes cloud control plane — hosted dashboard + webhook-triggered remote dispatch. Workers still run on operator's machine; only the control surface is hosted, so the audit trail integrity story stays intact.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "deploy:fly": "flyctl deploy",
+    "deploy:cf": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@hono/node-server": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

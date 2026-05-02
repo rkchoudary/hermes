@@ -1,0 +1,22 @@
+{
+  "name": "hermes-skill-aggregator",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": false,
+  "description": "Cross-project skill memory aggregator — opt-in upload of anonymized harness patterns. Network effect: every contributing operator makes Hermes smarter for everyone.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@hono/node-server": "^1.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}
