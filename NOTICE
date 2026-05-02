@@ -1,0 +1,59 @@
+Hermes
+Copyright 2026 Ram Peddu
+
+This product includes software developed by:
+- Ram Peddu (rkchoudary on GitHub) and contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+────────────────────────────────────────────────────────────────────────
+Third-party components — runtime dependencies (see package.json)
+────────────────────────────────────────────────────────────────────────
+
+This software depends on (but does not redistribute the source of):
+
+- zod                  © Colin McDonnell — MIT
+- tsx                  © Hiroki Osame — MIT
+- typescript           © Microsoft — Apache-2.0
+- @types/node          © DefinitelyTyped contributors — MIT
+- playwright           © Microsoft — Apache-2.0
+- next                 © Vercel — MIT
+- react / react-dom    © Meta — MIT
+- tailwindcss          © Tailwind Labs — MIT
+- hono                 © Yusuke Wada — MIT
+- @hono/node-server    © Yusuke Wada — MIT
+- @aws-sdk/client-kms  © Amazon — Apache-2.0
+- @aws-sdk/client-s3   © Amazon — Apache-2.0
+- pg                   © Brian C — MIT
+
+Full license texts for runtime dependencies are available via
+`pnpm licenses list`.
+
+────────────────────────────────────────────────────────────────────────
+Pattern catalog inspirations (concepts, not code)
+────────────────────────────────────────────────────────────────────────
+
+Hermes implements patterns researched from these projects (no code copied;
+patterns adapted and credited):
+
+- Archon V3            — YAML workflow runner pattern
+- Bernstein            — Deterministic scheduling + SoD
+- EXARCHON             — Cognitive recovery (3-patch + diagnose + fix-bugs)
+- Composio             — CI auto-fix loop (red-merge detection)
+- Hermes-Agent         — Skill memory (producer log + LLM reflection)
+- Vibe Kanban          — Board orchestration concepts
+
+────────────────────────────────────────────────────────────────────────
+Framework documentation indexed by the RAG plugin
+────────────────────────────────────────────────────────────────────────
+
+The plugin at plugins/rag/ ingests documentation from ~158 third-party
+frameworks per refs/doc-sources.json. Operators who run `auto:rag-fetch`
+download those docs to their local ~/.hermes/rag-docs/ directory.
+
+Each framework's docs are subject to its own license, recorded in
+.hermes/rag-docs/<framework>/meta.json. Operators redistributing the
+indexed chunks are responsible for compliance with each source license.
+Common licenses encountered: MIT, BSD-3, Apache-2.0, CC-BY-4.0, MPL-2.0.
+A few sources are vendor-EULA-restricted (Apple SwiftUI, Unity, Unreal)
+and should be treated as personal-use-only.

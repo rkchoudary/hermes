@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel in-progress CI for the same branch when a new push comes in.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-and-smoke:
+    name: Typecheck + Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps (workspace root)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (main package)
+        run: pnpm exec tsc --noEmit
+
+      - name: Smoke chain (22 suites, parallel)
+        run: pnpm auto:test:smoke
+
+  rag-plugin-typecheck:
+    name: RAG plugin typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck plugins/rag
+        working-directory: plugins/rag
+        run: ../../node_modules/.bin/tsc --noEmit
+
+  rag-end-to-end:
+    name: RAG end-to-end (real fetch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch htmx docs (small framework, ~200KB)
+        run: pnpm auto:rag-fetch htmx
+
+      - name: Verify RAG returns content
+        run: |
+          OUTPUT=$(pnpm auto:rag-query "form submit ajax" --framework htmx --k 1)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "score=" || (echo "::error::No BM25 score in output" && exit 1)
