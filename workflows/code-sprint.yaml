@@ -1,0 +1,51 @@
+name: code-sprint
+description: |
+  Code-Sprint phase — implementation authoring with 6 inner steps + 3-round
+  patch + cognitive recovery. Mirrors drive_phase logic in serial-by-module.sh.
+env:
+  AUTO_HARNESS_DRIVER: "1"
+  AUTO_FORCE_REASON: "solo-operator pre-customer; via yaml-runner"
+nodes:
+  - id: plan
+    cmd: pnpm auto:plan --module ${{ module }} --version ${{ version }} --type code-sprint --json
+    capture: task_id_json
+    extract:
+      task_id: $.task_id
+  - id: work
+    cmd: pnpm auto:work ${{ task_id }} --engine claude-code-cli --force
+    timeout: 1800
+  - id: council-async
+    cmd: pnpm auto:council-async ${{ task_id }}
+    background: true
+  - id: postflight
+    cmd: pnpm auto:postflight ${{ task_id }}
+  - id: patch-r1
+    when: postflight.exit_code != 0
+    cmds:
+      - pnpm auto:work ${{ task_id }} --engine claude-code-cli --force --patch
+      - pnpm auto:postflight ${{ task_id }}
+  - id: patch-r2
+    when: patch-r1.exit_code != 0
+    cmds:
+      - pnpm auto:work ${{ task_id }} --engine claude-code-cli --force --patch
+      - pnpm auto:postflight ${{ task_id }}
+  - id: patch-r3
+    when: patch-r2.exit_code != 0
+    cmds:
+      - pnpm auto:work ${{ task_id }} --engine claude-code-cli --force --patch
+      - pnpm auto:postflight ${{ task_id }}
+  - id: cognitive-recovery
+    when: patch-r3.exit_code != 0
+    cmds:
+      - pnpm auto:diagnose ${{ task_id }} --worker-stdout /tmp/serial-${{ task_id }}-postflight-r3.log --worker-exit-code 1
+      - pnpm auto:work ${{ task_id }} --engine claude-code-cli --force --fix-bugs
+      - pnpm auto:postflight ${{ task_id }}
+  - id: promote-and-land
+    cmds:
+      - pnpm auto:promote ${{ task_id }} --apply --human-override --reason "${AUTO_FORCE_REASON}"
+      - pnpm auto:land ${{ task_id }} --apply --force
+hooks:
+  pre_module:
+    - pnpm auto:intake --module ${{ module }} --create --tier auto --auto-fill
+  post_module:
+    - pnpm auto:tick

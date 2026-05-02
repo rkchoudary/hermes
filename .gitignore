@@ -1,0 +1,35 @@
+# Dependency directories
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime state — these are PROJECT-specific and should NEVER be committed
+# from a consumer project's checkout of this harness. Audit/escalation/
+# registry/cleanup state belongs in your project root, not here.
+.agent-runs/
+session-history/
+tick-state.json
+.harness-cache/
+
+# Per-developer settings
+.claude/settings.local.json
+
+# Test scratch
+/tmp-test-*/
