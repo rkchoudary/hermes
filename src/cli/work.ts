@@ -35,7 +35,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2175,6 +2175,32 @@ async function main() {
   // appendStateLog call above (line 1019). The crash guard is armed; any
   // throw here triggers recoverFromCrash() at the outer catch.
     let prompt = buildWorkerPrompt(args.taskId, runId);
+
+    // RAG enrichment — framework-aware doc retrieval (BM25 over indexed
+    // official docs, plus curated pattern notes). Plugin lives at
+    // plugins/rag/; populate via `pnpm auto:rag-fetch --all`. Disable via
+    // env HERMES_RAG_DISABLE=1 if you don't want the prompt enriched.
+    if (process.env.HERMES_RAG_DISABLE !== '1') {
+      try {
+        const ragPath = path.resolve(PACKAGE_ROOT, 'plugins', 'rag', 'src', 'index.ts');
+        if (fs.existsSync(ragPath)) {
+          const ragUrl = pathToFileURL(ragPath).toString();
+          interface RagModule { enrichPromptForPack: (pack: { allowed_paths?: string[]; objective?: string; references?: { code_paths?: string[] }; acceptance_criteria?: Array<unknown> }) => Promise<string>; }
+          const rag = await import(ragUrl) as unknown as RagModule;
+          const enrichmentPack = readTaskPack(runId, args.taskId);
+          const block = await rag.enrichPromptForPack({
+            allowed_paths: enrichmentPack.allowed_paths,
+            objective: enrichmentPack.objective,
+            references: { code_paths: enrichmentPack.references.code_paths },
+            acceptance_criteria: enrichmentPack.acceptance_criteria,
+          });
+          if (block) prompt = block + '\n\n' + prompt;
+        }
+      } catch (e) {
+        // RAG is non-blocking. Log and continue with the un-enriched prompt.
+        console.warn(`[rag] enrichment skipped: ${(e as Error).message.slice(0, 200)}`);
+      }
+    }
 
     // Sprint J — self-healing harness fix-bugs mode. When invoked via
     // --fix-bugs, prepend the council's BugReview ordered fix list as a
