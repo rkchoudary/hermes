@@ -43,24 +43,47 @@ export function registerRetriever(r: Retriever): void {
 }
 
 export async function enrichPromptForPack(pack: { allowed_paths?: string[]; objective?: string; references?: { code_paths?: string[] }; acceptance_criteria?: Array<unknown> }): Promise<string> {
+  // Step 1: pattern-based retrievers (curated notes per framework).
   const matched: Retriever[] = [];
   for (const r of RETRIEVERS) {
     try { if (r.matches(pack)) matched.push(r); } catch { /* skip */ }
   }
-  if (matched.length === 0) return '';
 
-  const blocks: string[] = [];
+  const patternBlocks: string[] = [];
+  const matchedFrameworks = new Set<string>();
   for (const r of matched) {
+    matchedFrameworks.add(r.name.split('@')[0]);
     try {
       const block = await r.enrich(pack);
-      if (block) blocks.push(`### ${r.name}\n\n${block}`);
+      if (block) patternBlocks.push(`### ${r.name}\n\n${block}`);
     } catch (e) {
-      blocks.push(`### ${r.name}\n\n_(retriever errored: ${(e as Error).message.slice(0, 100)})_`);
+      patternBlocks.push(`### ${r.name}\n\n_(retriever errored: ${(e as Error).message.slice(0, 100)})_`);
     }
   }
-  if (blocks.length === 0) return '';
 
-  return [
+  // Step 2: BM25 doc retrieval over indexed framework docs (if any).
+  // Restricted to the frameworks the pattern matchers fired on, so we
+  // don't pollute the prompt with off-topic docs.
+  let docBlock = '';
+  try {
+    const { searchAll, formatHits } = await import('./docs/registry');
+    const queryText = [
+      pack.objective || '',
+      ...(pack.allowed_paths || []),
+      ...(pack.references?.code_paths || []),
+      ...((pack.acceptance_criteria || []).map(ac => typeof ac === 'string' ? ac : ((ac as { text?: string })?.text || ''))),
+    ].join(' ');
+    const fwFilter = matchedFrameworks.size > 0 ? [...matchedFrameworks] : undefined;
+    const hits = searchAll(queryText, 5, fwFilter);
+    if (hits.length > 0) docBlock = formatHits(hits);
+  } catch (e) {
+    // If the docs subsystem isn't initialized (no indexed frameworks yet)
+    // or fails for any reason, fall through to pattern-only enrichment.
+  }
+
+  if (patternBlocks.length === 0 && !docBlock) return '';
+
+  const sections: string[] = [
     '',
     '═══════════════════════════════════════════════════════════════',
     '  FRAMEWORK CONTEXT (auto-retrieved)',
@@ -70,9 +93,17 @@ export async function enrichPromptForPack(pack: { allowed_paths?: string[]; obje
     'as authoritative references; if they contradict your training, prefer',
     'these (your training may be stale).',
     '',
-    blocks.join('\n\n'),
-    '',
-  ].join('\n');
+  ];
+  if (patternBlocks.length > 0) {
+    sections.push('## Curated patterns', '');
+    sections.push(patternBlocks.join('\n\n'));
+    sections.push('');
+  }
+  if (docBlock) {
+    sections.push('## Official doc snippets (BM25 retrieval)', '');
+    sections.push(docBlock);
+  }
+  return sections.join('\n');
 }
 
 // Tier-1: hand-curated, multi-paragraph pattern blocks
