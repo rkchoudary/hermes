@@ -43,8 +43,13 @@ import * as os from 'node:os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..');
-// HARNESS_ROOT is the worktree where the harness lives (used for .agent-runs/).
-const HARNESS_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
+// HARNESS_ROOT is the project where .agent-runs/ lives. v0.1 OSS: honor
+// HERMES_PROJECT_ROOT (canonical) and HARNESS_PROJECT_ROOT (legacy alias)
+// before falling back to the package-relative parent. Without this, the
+// land CLI can't find tasks dispatched from operator project repos.
+const HARNESS_ROOT = process.env.HERMES_PROJECT_ROOT
+  || process.env.HARNESS_PROJECT_ROOT
+  || path.resolve(PACKAGE_ROOT, '..', '..');
 // MAIN_REPO_ROOT is where worktrees + main checkout live. Resolved from
 // `git rev-parse --git-common-dir` which always points at the main repo's
 // .git/ even from inside a linked worktree.
