@@ -1,0 +1,28 @@
+{
+  "fixture_id": "F1-intake-rbac-denial",
+  "purpose": "Pre-F1 intake-approve threw 'Permission denied: lacks priv:tier-1-intake-approve' under default-operator identity. Driver script swallowed with `|| true`, so M09/M10 silently never got approved and later refused dispatch. With L0 envelope, this MUST emit policy-refusal with structured remediation.",
+  "stage": "auto:intake",
+  "harness_version_at_capture": "h-pre-F1",
+  "captured_at": "2026-05-03T10:42:30Z",
+  "regression_against": "https://github.com/rkchoudary/ProjectXV4/commit/711791d",
+  "input": {
+    "args": ["--module", "M09", "--approve", "--as", "Domain-PM", "--as-id", "Ram Peddu"],
+    "identity": {
+      "sub": "default-operator",
+      "groups": ["default-operator"],
+      "effective_roles": ["operator"],
+      "effective_permissions": ["read:intake", "write:intake-create", "write:intake-amend"]
+    },
+    "intake_state": { "module_id": "M09", "risk_tier": "tier-1", "status": "draft" }
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "policy-refusal",
+    "retryable": false,
+    "driver_action": "pause-fanout",
+    "reason_substring": "priv:tier-1-intake-approve",
+    "details_must_include": ["remediation"],
+    "must_NOT_be": "success"
+  },
+  "anti_pattern_being_tested": "Silent || true in serial-by-module.sh script. Layer 0 doctrine: no silent errors; every refusal goes through the structured envelope."
+}

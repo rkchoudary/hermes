@@ -1,0 +1,36 @@
+{
+  "fixture_id": "L4-plateau-identical-rounds",
+  "purpose": "Driver should detect when patch round N produces the same set of failing tests + identical diff fingerprint as round N-1. Today the harness runs all 3 patch rounds + cognitive recovery = ~15 min wasted on identical-shape failures. With L4.B plateau detector, abort after round 2 if progress score shows oscillation or identical failures.",
+  "stage": "auto:postflight",
+  "harness_version_at_capture": "h-pre-L4",
+  "captured_at": "(synthetic)",
+  "input": {
+    "round_history": [
+      {
+        "round": 1,
+        "failing_test_names": ["src/lib/foo/__tests__/bar.test.ts > should X"],
+        "location_fingerprints": ["src/lib/foo/bar.ts:42"],
+        "diff_sha256_since_prev": "a3f2b1c0…",
+        "new_failures_introduced": []
+      },
+      {
+        "round": 2,
+        "failing_test_names": ["src/lib/foo/__tests__/bar.test.ts > should X"],
+        "location_fingerprints": ["src/lib/foo/bar.ts:42"],
+        "diff_sha256_since_prev": "a3f2b1c0…",
+        "new_failures_introduced": []
+      }
+    ],
+    "current_round": 3
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "gate-fail",
+    "retryable": false,
+    "driver_action": "park",
+    "reason_substring": "plateau detected",
+    "details_must_include": ["plateau_streak", "identical_failure_set"],
+    "must_NOT_run_round_3": true
+  },
+  "anti_pattern_being_tested": "Run all 3 retry rounds even when round 1 and 2 produced identical failure shape + identical diff. Saves 5 min wall-clock per parked module."
+}

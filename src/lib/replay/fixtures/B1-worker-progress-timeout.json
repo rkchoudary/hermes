@@ -1,0 +1,37 @@
+{
+  "fixture_id": "B1-worker-progress-timeout",
+  "purpose": "M05 fan-out 2026-05-02: worker hung past the 45-min ceiling because SIGTERM didn't propagate to claude's tool subprocesses. Pre-B1, the kill ladder failed silently. With B1 (process-group kill) + L4 (no-output watchdog, future), this MUST emit worker-error kind with retryable=true, driver_action=requeue, and timeout.json evidence.",
+  "stage": "auto:work",
+  "harness_version_at_capture": "h-pre-B1",
+  "captured_at": "2026-05-02T17:30:00Z",
+  "regression_against": "https://github.com/rkchoudary/hermes/commit/0215b11",
+  "input": {
+    "task_pack": {
+      "task_id": "TP-2026-05-02-005",
+      "type": "code-sprint",
+      "module": "M05",
+      "module_or_sprint": "M05-impl-v1.0"
+    },
+    "spawn_state": {
+      "claude_pid_present": true,
+      "detached": false,
+      "process_group_isolated": false
+    },
+    "progress_signal": {
+      "stdout_chunks_in_last_7min": 0,
+      "edit_count_delta_last_7min": 0,
+      "tool_calls_delta_last_7min": 0,
+      "elapsed_sec": 3600
+    }
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "worker-error",
+    "retryable": true,
+    "driver_action": "requeue",
+    "reason_substring": "[timeout-",
+    "evidence_must_include": ["timeout.json"],
+    "details_must_include": ["timeout_sec", "elapsed_sec", "edits_observed"]
+  },
+  "anti_pattern_being_tested": "Total-elapsed timer kills at 45 min regardless of progress signal. L4.A (Day 6) replaces with no-output ladder: 5 min SIGTERM, 7 min SIGKILL. Combined with B1 process-group kill ensures the tree dies."
+}

@@ -27,6 +27,10 @@ const __filename = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(__filename), '..');
 
 const SMOKES = [
+  'auto:test:contracts',
+  'auto:test:budget-reservation',
+  'auto:test:progress-score',
+  'auto:test:fanout-scheduler',
   'auto:test:guards',
   'auto:test:goal',
   'auto:test:governance',

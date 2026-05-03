@@ -90,7 +90,9 @@ console.log('\n[costRollup smoke] starting…\n');
     windows: [],
     cost_per_output_byte_usd: { 'claude-cli': 0.000001 },
     actions_on_threshold: { warning_pct: 50, engaged_pct: 80, exhausted_pct: 100, action: 'warn-only' },
-  } as BudgetContract;
+    per_task_cap_usd: 0,
+    per_tenant_daily_cap_usd: 0,
+  } as unknown as BudgetContract;
   const t2 = { ...t1, est_usd: undefined };
   assertEq(entryUsd(t2, budget), 100_000 * 0.000001, 'byte heuristic used when est_usd missing');
   assertEq(entryUsd(t2), 0, 'no budget + no est_usd → 0');

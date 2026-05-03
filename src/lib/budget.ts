@@ -50,6 +50,19 @@ export const BudgetContract = z.object({
     'codex-cli': 0.00001,            // gpt-5.5 estimated
     'manual': 0,                     // human-time, not API cost
   }),
+  /**
+   * Layer 1 — per-task USD cap. Prevents a single runaway task pack
+   * from consuming the daily budget. When a task's reserved+spent total
+   * exceeds this, reserveBudget refuses further dispatch on that task.
+   * 0 = disabled (default).
+   */
+  per_task_cap_usd: z.number().nonnegative().default(0),
+  /**
+   * Layer 1 — per-tenant per-day cap. Multi-tenant deployments use this
+   * to prevent one tenant's experiments from blowing through a shared
+   * daily budget. Falls back to the daily window cap if unset.
+   */
+  per_tenant_daily_cap_usd: z.number().nonnegative().default(0),
 });
 
 export type BudgetContract = z.infer<typeof BudgetContract>;

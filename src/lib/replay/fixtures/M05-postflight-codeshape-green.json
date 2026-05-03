@@ -1,0 +1,31 @@
+{
+  "fixture_id": "M05-postflight-codeshape-green",
+  "purpose": "M05 worker output was green (22/22 FRs, 65/65 tests, typecheck clean). Postflight should emit gate-pass with the L0 envelope.",
+  "stage": "auto:postflight",
+  "harness_version_at_capture": "h-711791d",
+  "captured_at": "2026-05-03T11:42:30Z",
+  "input": {
+    "task_pack": {
+      "task_id": "TP-2026-05-03-001",
+      "run_id": "2026-05-03-batch-1",
+      "type": "code-sprint",
+      "module": "M05",
+      "module_or_sprint": "M05-impl-v1.0",
+      "state": "awaiting-review"
+    },
+    "evidence_files": {
+      "worker-handoff.json": { "status": "complete", "fr_coverage_count": 22, "ac_count": 13, "test_count": 65 },
+      "diff.patch": { "size_bytes": 4489, "summary": "M05 v1.0 implementation: BUDGET module + API routes + tests" },
+      "test-summary.md": { "all_green": true, "test_count": 65, "duration_ms": 250 },
+      "duplicate-scan.json": { "duplicates_found": 0 },
+      "risk-register.md": { "risks_flagged": 1, "risks_kind": ["operator-coverage-gap"] }
+    }
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "gate-pass",
+    "retryable": false,
+    "driver_action": "advance",
+    "reason_substring": "code-sprint evidence gate"
+  }
+}

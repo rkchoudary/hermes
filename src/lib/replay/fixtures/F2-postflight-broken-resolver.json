@@ -1,0 +1,29 @@
+{
+  "fixture_id": "F2-postflight-broken-resolver",
+  "purpose": "Pre-F2 postflight bug: findArtifactPath returned null for code-sprint task type, CLI exited 1 with 'could not infer artifact path'. Driver mistook this for gate-fail and burned 3 patch rounds. With L0 envelope, this MUST emit precondition-fail (NOT gate-fail) so driver routes to mark-gate-broken instead of patch-round.",
+  "stage": "auto:postflight",
+  "harness_version_at_capture": "h-pre-F2",
+  "captured_at": "2026-05-03T08:38:00Z",
+  "regression_against": "https://github.com/rkchoudary/ProjectXV4/commit/711791d",
+  "input": {
+    "task_pack": {
+      "task_id": "TP-2026-05-03-001",
+      "run_id": "2026-05-03-batch-1",
+      "type": "code-sprint",
+      "module_or_sprint": "M05-impl-v1.0"
+    },
+    "stage_resolver_state": {
+      "findArtifactPath_returns": null,
+      "code_sprint_handler": "missing"
+    }
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "precondition-fail",
+    "retryable": false,
+    "driver_action": "mark-gate-broken",
+    "reason_substring": "could not infer artifact path",
+    "must_NOT_be": "gate-fail"
+  },
+  "anti_pattern_being_tested": "Driver sees exit 1, treats as gate-fail, runs patch-round. Layer 0 doctrine: driver never infers semantics from exit code alone."
+}
