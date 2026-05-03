@@ -35,10 +35,14 @@ ARG GH_VERSION=2.61.0
 ARG PNPM_VERSION=9.12.3
 
 # Apt-get with --no-install-recommends to keep the image lean.
+# gh CLI ships per-arch .deb files; use dpkg --print-architecture so the
+# image builds correctly on both amd64 (Intel/AMD) and arm64 (Apple
+# Silicon, AWS Graviton).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl git ripgrep jq build-essential \
- && curl -fsSL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.deb -o /tmp/gh.deb \
+ && DPKG_ARCH=$(dpkg --print-architecture) \
+ && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${DPKG_ARCH}.deb" -o /tmp/gh.deb \
  && dpkg -i /tmp/gh.deb \
  && rm /tmp/gh.deb \
  && rm -rf /var/lib/apt/lists/*
