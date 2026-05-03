@@ -860,16 +860,24 @@ async function dispatchClaudeCodeCli(
     if (useDocker && !errBox.value) {
       const evDirPath = path.join(harnessRoot, '.agent-runs', runId, 'evidence', taskId);
       try { fs.mkdirSync(evDirPath, { recursive: true }); } catch { /* tolerate */ }
+      // Mount the operator's project root (HERMES_PROJECT_ROOT or
+      // harnessRoot) at the SAME path inside the container — task pack
+      // absolute paths resolve identically. cwd of the worker stays at
+      // the host cwd, which is inside that mount.
+      const projectRoot = process.env.HERMES_PROJECT_ROOT
+        ?? process.env.HARNESS_PROJECT_ROOT
+        ?? harnessRoot;
       const handles = spawnWorkerInDocker({
         taskId,
-        worktreeHostPath: cwd,
-        evidenceHostPath: evDirPath,
+        projectRootHostPath: projectRoot,
+        cwd,
         workerArgs: ['claude', ...claudeArgs],
         stdin: prompt,
       });
       child = handles.child;
       killTree = handles.kill;
       console.log(`[claude-code-cli] docker container: ${handles.containerName}`);
+      console.log(`[claude-code-cli] docker mount: ${projectRoot}:${projectRoot}:rw`);
     } else {
       const c = spawn('claude', claudeArgs, {
         cwd,
@@ -911,10 +919,24 @@ async function dispatchClaudeCodeCli(
     // L4.A — no-output progress watchdog (fires every 30s).
     // 2 min: warn (no kill); 5 min: SIGTERM the tree; 7 min: SIGKILL.
     // Configurable via AUTO_NO_OUTPUT_*_SEC env vars; defaults below.
+    //
+    // Docker-mode caveat (drive test 2026-05-03): docker run's stdio pipe
+    // buffers chunks more aggressively than a host spawn, so a healthy
+    // container working on file analysis can appear silent to the host
+    // for minutes at a time even while claude inside is busy. Disable
+    // the no-output watchdog by default in docker mode and rely on the
+    // total-elapsed ceiling. Operator can re-enable with
+    // AUTO_NO_OUTPUT_WATCHDOG=1.
     const noOutWarnSec = parseInt(process.env.AUTO_NO_OUTPUT_WARN_SEC ?? '120', 10);
     const noOutTermSec = parseInt(process.env.AUTO_NO_OUTPUT_TERM_SEC ?? '300', 10);
     const noOutKillSec = parseInt(process.env.AUTO_NO_OUTPUT_KILL_SEC ?? '420', 10);
-    const noOutputDisabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '0';
+    const noOutputExplicitlyDisabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '0';
+    const noOutputExplicitlyEnabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '1';
+    const noOutputDisabled = noOutputExplicitlyDisabled
+      || (useDocker && !noOutputExplicitlyEnabled);
+    if (noOutputDisabled && useDocker) {
+      console.log('[no-output-watchdog] disabled in docker mode (set AUTO_NO_OUTPUT_WATCHDOG=1 to force-enable; total-elapsed ceiling still applies)');
+    }
     let noOutputTimedOut = false;
     const watchdog = noOutputDisabled ? null : setInterval(() => {
       const sinceProgressSec = Math.round((Date.now() - lastProgressAt) / 1000);

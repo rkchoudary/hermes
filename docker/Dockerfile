@@ -62,6 +62,14 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN usermod --login worker --move-home --home /home/worker node \
  && groupmod --new-name worker node
 
+# Pre-create the claude-cli home structure so the worker user can write
+# to it at runtime. Without this, mounting just the credentials FILE
+# leaves /home/worker/.claude owned by root (created implicitly by the
+# docker mount) and claude-cli's mkdir session-env/ fails with EACCES.
+RUN mkdir -p /home/worker/.claude/session-env /home/worker/.claude/projects /home/worker/.claude/sessions \
+ && chown -R worker:worker /home/worker/.claude \
+ && chmod 700 /home/worker/.claude
+
 USER worker
 WORKDIR /work
 

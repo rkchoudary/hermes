@@ -56,6 +56,7 @@
     "auto:health": "tsx src/cli/health.ts",
     "auto:start": "tsx src/cli/start.ts",
     "auto:test:contracts": "tsx src/lib/__tests__/contracts.smoke.ts",
+    "auto:test:event-collector": "tsx src/lib/events/__tests__/eventCollector.smoke.ts",
     "auto:test:budget-reservation": "tsx src/lib/__tests__/budgetReservation.smoke.ts",
     "auto:test:progress-score": "tsx src/lib/__tests__/progressScore.smoke.ts",
     "auto:test:fanout-scheduler": "tsx src/lib/__tests__/fanoutScheduler.smoke.ts",

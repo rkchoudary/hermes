@@ -19,16 +19,23 @@
  * non-docker path (with B1 + L4.A + L4.B) keeps working unchanged.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
 export interface DockerSpawnOptions {
   /** Used as the container name; derived from task_id. */
   taskId: string;
-  /** Worktree mounted at /work in the container (rw). */
-  worktreeHostPath: string;
-  /** Evidence dir mounted at /evidence (rw). */
-  evidenceHostPath: string;
+  /** Project root on the host. Mounted 1:1 (host path = container path)
+   *  so absolute paths in the task pack resolve inside the container.
+   *  Typically HERMES_PROJECT_ROOT or harnessRoot(). */
+  projectRootHostPath: string;
+  /** Optional FRD root mount (read-only). Default: ~/Obsidian/NBF-FRD/FRDs
+   *  if it exists. Mounted 1:1 so frd_path absolute references resolve. */
+  frdRootHostPath?: string;
+  /** Container cwd. Should be a path INSIDE projectRootHostPath. Default:
+   *  same as projectRootHostPath. */
+  cwd?: string;
   /** Image tag (default hermes-worker:latest). */
   image?: string;
   /** Memory cap (default 4g). */
@@ -85,6 +92,19 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
   // tokens — which is desirable: the host file stays in sync with the
   // newest accessToken, and the next host-side claude call doesn't need
   // a fresh extraction from Keychain.
+  // Mount host paths at the SAME absolute path inside the container so
+  // task-pack absolute paths (evidence_dir, frd_path, allowed_paths)
+  // resolve identically. The drive test 2026-05-03 surfaced this:
+  // mounting at /work and translating paths is fragile because the
+  // task pack carries host-shaped absolute paths the worker cannot
+  // rewrite. 1:1 mounts make the container behave like a chroot of the
+  // relevant host slices.
+  const containerCwd = opts.cwd ?? opts.projectRootHostPath;
+  // Default FRD root: ~/Obsidian/NBF-FRD/FRDs when it exists. Operator
+  // can override via opts.frdRootHostPath OR HARNESS_FRD_ROOT env.
+  const frdRoot = opts.frdRootHostPath
+    ?? process.env.HARNESS_FRD_ROOT
+    ?? path.join(home, 'Obsidian', 'NBF-FRD', 'FRDs');
   const args: string[] = [
     'run',
     '--rm',
@@ -93,10 +113,9 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
     '--memory', opts.memory ?? DEFAULT_MEMORY,
     '--cpus', String(opts.cpus ?? DEFAULT_CPUS),
     '--pids-limit', String(opts.pidsLimit ?? DEFAULT_PIDS_LIMIT),
-    // Worktree (rw) — claude reads + writes here
-    '-v', `${opts.worktreeHostPath}:/work:rw`,
-    // Evidence dir (rw) — diff.patch, test-summary.md, etc.
-    '-v', `${opts.evidenceHostPath}:/evidence:rw`,
+    '--workdir', containerCwd,
+    // Project root mounted 1:1 (rw — claude edits source files here).
+    '-v', `${opts.projectRootHostPath}:${opts.projectRootHostPath}:rw`,
     // Claude max plan credentials (RW so token refresh round-trips back
     // to the host file).
     '-v', `${credsPath}:/home/worker/.claude/.credentials.json:rw`,
@@ -106,6 +125,11 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
     // stdin in/stdout/stderr piped via -i (interactive but non-tty)
     '-i',
   ];
+  // FRD root (read-only) — only mount if the host path actually exists,
+  // otherwise docker errors out trying to mount a missing source.
+  if (fs.existsSync(frdRoot)) {
+    args.push('-v', `${frdRoot}:${frdRoot}:ro`);
+  }
   // Forward selected env vars
   for (const [k, v] of Object.entries(opts.env ?? {})) {
     args.push('-e', `${k}=${v}`);

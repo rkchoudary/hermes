@@ -28,6 +28,7 @@ const ROOT = path.resolve(path.dirname(__filename), '..');
 
 const SMOKES = [
   'auto:test:contracts',
+  'auto:test:event-collector',
   'auto:test:budget-reservation',
   'auto:test:progress-score',
   'auto:test:fanout-scheduler',
