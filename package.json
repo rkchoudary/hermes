@@ -59,6 +59,7 @@
     "auto:test:event-collector": "tsx src/lib/events/__tests__/eventCollector.smoke.ts",
     "auto:test:claude-stream": "tsx src/lib/engines/__tests__/claudeStreamAdapter.smoke.ts",
     "auto:test:liveness": "tsx src/lib/__tests__/liveness.smoke.ts",
+    "auto:test:chaos": "tsx src/lib/__tests__/chaos.smoke.ts",
     "auto:test:budget-reservation": "tsx src/lib/__tests__/budgetReservation.smoke.ts",
     "auto:test:progress-score": "tsx src/lib/__tests__/progressScore.smoke.ts",
     "auto:test:fanout-scheduler": "tsx src/lib/__tests__/fanoutScheduler.smoke.ts",

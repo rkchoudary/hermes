@@ -31,6 +31,7 @@ const SMOKES = [
   'auto:test:event-collector',
   'auto:test:claude-stream',
   'auto:test:liveness',
+  'auto:test:chaos',
   'auto:test:budget-reservation',
   'auto:test:progress-score',
   'auto:test:fanout-scheduler',
