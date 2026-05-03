@@ -56,7 +56,11 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # Non-root worker user; uid 1000 matches the typical operator uid so
 # bind-mounted worktrees retain expected ownership across the boundary.
-RUN useradd --create-home --uid 1000 --shell /bin/bash worker
+# The node:22-bookworm-slim base already ships a `node` user at uid 1000
+# with a home dir at /home/node — rename it to `worker` so the rest of
+# the image references stay consistent.
+RUN usermod --login worker --move-home --home /home/worker node \
+ && groupmod --new-name worker node
 
 USER worker
 WORKDIR /work
