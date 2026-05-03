@@ -60,7 +60,7 @@ Each module had:
 
    Re-running CI on the same SHA passed cleanly. M03 was then merged. **Conclusion: not a Hermes bug, not an M03 code issue. Project-side housekeeping** — the perf test should be quarantined or relaxed; the eslint dep should be added to `canonical-json-rfc8785/package.json`.
 
-2. **Long-running Claude Code dispatches can stall** — M05's worker started but produced no output after ~1 hour and was killed. This is a known Claude Code CLI behavior under certain prompt patterns. Mitigation: per-module 90-min timeout exists in driver scripts; the bare `auto:work` invocation doesn't enforce it. v0.2 work: hoist the timeout into `auto:work` itself.
+2. **Long-running Claude Code dispatches can stall** — M05's worker started but produced no output after ~1 hour and was killed. Root cause: `claude --print` was spawned in the harness's own process group, so the 45-min `auto:work` watchdog SIGTERMed claude but couldn't reach the tool subprocesses claude itself had spawned, which kept the stdio pipes warm and stretched the kill ladder past the configured ceiling. **Fixed inline (commit forthcoming):** the dispatcher now spawns claude with `detached: true` and signals the negative PID, so SIGTERM/SIGKILL escalate to the whole process group; on timeout we also persist `evidence/<task_id>/timeout.json` with `kind: worker-timeout`, elapsed seconds, last observed tool/file, and the configured budget — so the reviewer/diagnose surface can tell a timeout apart from a crash without grepping the dispatch log.
 
 ## Audit trail
 

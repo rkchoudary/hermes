@@ -820,11 +820,27 @@ async function dispatchClaudeCodeCli(
     console.log(`[claude-code-cli] model=${modelChoice} (tier-routed for type=${routedType})`);
   }
 
+  // E2E fan-out finding 2026-05-02 (M05): SIGTERM to claude's immediate PID
+  // doesn't propagate to its tool subprocesses. Result: claude exits but a
+  // grandchild holds open the stdout pipe, child.on('exit') still fires (good)
+  // but the kill ladder takes longer than expected when the child is itself
+  // wedged. Fix: spawn detached so claude becomes its own session/process-group
+  // leader, then send signals to the *negative pid* to kill the whole group.
+  let timedOut = false;
   await new Promise<void>((resolve) => {
     const child = spawn('claude', claudeArgs, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,  // claude → new session; signal -pid kills whole tree
     });
+    const childPid = child.pid;
+    const killTree = (sig: NodeJS.Signals): void => {
+      if (!childPid) { try { child.kill(sig); } catch { /* gone */ } return; }
+      try { process.kill(-childPid, sig); } catch {
+        // process group gone; try direct PID as fallback
+        try { child.kill(sig); } catch { /* gone */ }
+      }
+    };
     if (child.stdin) {
       child.stdin.write(prompt);
       child.stdin.end();
@@ -836,9 +852,11 @@ async function dispatchClaudeCodeCli(
       process.stderr.write(s);
     });
     const timer = setTimeout(() => {
-      try { child.kill('SIGTERM'); } catch { /* gone */ }
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, 10_000);
-      errBox.value = new Error(`worker timed out after ${workerTimeoutSec}s`);
+      timedOut = true;
+      console.error(`[claude-code-cli] worker timed out after ${workerTimeoutSec}s — killing process group ${childPid ? '-' + childPid : '(no pid)'}`);
+      killTree('SIGTERM');
+      setTimeout(() => killTree('SIGKILL'), 10_000);
+      errBox.value = new Error(`[timeout-${Math.round(workerTimeoutSec / 60)}m] worker timed out after ${workerTimeoutSec}s (no completion within budget)`);
     }, workerTimeoutSec * 1000);
     child.on('error', (err) => {
       errBox.value = err as Error;
@@ -852,6 +870,34 @@ async function dispatchClaudeCodeCli(
       resolve();
     });
   });
+
+  // Persist a structured timeout-evidence file so the operator (and any
+  // downstream review/diagnose surface) can distinguish a wall-clock timeout
+  // from a crash/SoD-violation/etc. without having to grep the dispatch log.
+  if (timedOut) {
+    try {
+      const evDir = evidenceDir(runId, taskId);
+      fs.mkdirSync(evDir, { recursive: true });
+      const timeoutPayload = {
+        kind: 'worker-timeout',
+        engine: 'claude-code-cli',
+        task_id: taskId,
+        run_id: runId,
+        timeout_sec: workerTimeoutSec,
+        elapsed_sec: Math.round((Date.now() - start) / 1000),
+        timed_out_at: new Date().toISOString(),
+        edits_observed: editsCount,
+        tool_calls_observed: toolCallsCount,
+        last_tool: lastTool,
+        last_file: lastFile,
+        note: 'Process group SIGTERM/SIGKILL escalation completed. Task transitions to needs-revision; operator may bump AUTO_WORKER_TIMEOUT_SEC and retry.',
+      };
+      fs.writeFileSync(
+        path.join(evDir, 'timeout.json'),
+        JSON.stringify(timeoutPayload, null, 2),
+      );
+    } catch { /* best-effort */ }
+  }
 
   // Worktree HEAD guard — verify branch + HEAD unchanged
   const postSpawnHead = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).stdout?.trim() || '';
