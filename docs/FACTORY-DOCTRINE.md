@@ -73,6 +73,39 @@ detached process-group kill + worktree HEAD guard — these are the
 fallback when Docker isn't available. Unattended overnight fan-outs
 should always use container mode.
 
+### macOS authentication: extracted credentials
+
+claude-code-cli on macOS stores OAuth tokens in Keychain Services
+(service `Claude Code-credentials`), which Docker volume mounts can't
+reach. The container therefore reports "Not logged in" if you mount
+`~/.claude` directly.
+
+Resolution: `docker/extract-claude-creds.sh` reads the Keychain blob
+into `~/.harness/claude-credentials.json` (mode 600), and the worker
+container mounts that single file at
+`/home/worker/.claude/.credentials.json`. Tokens auto-refresh inside
+the container via the refreshToken flow; re-run the extractor when
+prompted by the probe to pick up new access tokens.
+
+### macOS network egress: bridge-only by default
+
+`docker/setup-egress-bridge.sh` creates the `hermes-egress-allowlist`
+bridge. On Linux, host iptables enforce a kernel-level allowlist
+(api.anthropic.com, github.com, npmjs.org). On **macOS Docker Desktop**,
+host iptables don't reach the LinuxKit VM, so enforcement is
+**bridge-isolation only** — workers are off the host network and
+isolated from other containers, but can still reach the public
+internet.
+
+`compat-probe.sh` Probe #7 is a soft-warn on macOS by default (counts
+as pass when the bridge exists) and hard-fail on Linux. Set
+`HERMES_DOCKER_STRICT_EGRESS=1` to require kernel-level filtering on a
+Mac (e.g. when running colima with full Linux iptables support).
+
+For solo-operator overnight runs with trusted prompts, bridge
+isolation is the documented v0 posture. Operators who need hard
+egress enforcement should install colima or run on Linux.
+
 ## 6. Cost is a precondition, not a post-mortem
 
 Layer 1 `reserveBudget()` runs BEFORE every dispatch. `recordSpend()` /
