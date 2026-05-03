@@ -1,0 +1,18 @@
+{
+  "fixture_id": "land-gh-unauth",
+  "purpose": "auto:land should emit infrastructure-error and request requeue when gh CLI is unauthenticated.",
+  "stage": "auto:land",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_state": "ready-for-merge",
+    "gh_authenticated": false
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "infrastructure-error",
+    "retryable": true,
+    "driver_action": "requeue",
+    "reason_substring": "gh"
+  }
+}

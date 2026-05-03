@@ -1,0 +1,18 @@
+{
+  "fixture_id": "promote-success",
+  "purpose": "auto:promote transitions a promotable task with codex.verdict=GO to ready-for-merge.",
+  "stage": "auto:promote",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_id": "TP-test-promote",
+    "task_state": "promotable",
+    "codex_verdict": "GO"
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance"
+  }
+}

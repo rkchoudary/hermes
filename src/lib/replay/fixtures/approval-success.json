@@ -1,0 +1,18 @@
+{
+  "fixture_id": "approval-success",
+  "purpose": "Stage 26 production-model-use-expansion approval signed by approver role.",
+  "stage": "auto:approval",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "module": "M01",
+    "validation_signed": true,
+    "approver_identity_present": true
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance"
+  }
+}

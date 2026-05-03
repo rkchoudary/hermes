@@ -1,0 +1,19 @@
+{
+  "fixture_id": "diagnose-success",
+  "purpose": "auto:diagnose produces _bug-review.json after 3+ failed postflight rounds; expect success with the bug-review evidence file.",
+  "stage": "auto:diagnose",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_id": "TP-test-diagnose",
+    "round_failures": 3,
+    "evidence_files": ["worker-handoff.json", "test-summary.md"]
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance",
+    "evidence_must_include": ["_bug-review.json"]
+  }
+}

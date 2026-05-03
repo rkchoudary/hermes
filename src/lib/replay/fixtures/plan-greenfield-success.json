@@ -1,0 +1,20 @@
+{
+  "fixture_id": "plan-greenfield-success",
+  "purpose": "auto:plan against an approved intake + existing FRD should succeed and emit a code-sprint task pack.",
+  "stage": "auto:plan",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "args": ["--module", "M01", "--version", "v1.0", "--type", "code-sprint"],
+    "intake_state": { "module_id": "M01", "status": "approved", "risk_tier": "tier-2" },
+    "frd_path_resolves": true,
+    "module_yaml": "present"
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance",
+    "reason_substring": "task pack generated"
+  }
+}

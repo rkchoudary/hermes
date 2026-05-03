@@ -1,0 +1,19 @@
+{
+  "fixture_id": "plan-intake-not-approved",
+  "purpose": "auto:plan should refuse with policy-refusal when the module's intake is in draft state.",
+  "stage": "auto:plan",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "args": ["--module", "M09", "--version", "v0.1", "--type", "code-sprint"],
+    "intake_state": { "module_id": "M09", "status": "draft", "approvals": 0 }
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "policy-refusal",
+    "retryable": false,
+    "driver_action": "pause-fanout",
+    "reason_substring": "intake",
+    "details_must_include": ["remediation"]
+  }
+}

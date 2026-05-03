@@ -1,0 +1,20 @@
+{
+  "fixture_id": "consensus-gate-pass",
+  "purpose": "Codex consensus reviewer returns GO verdict on a complete task pack.",
+  "stage": "auto:consensus",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_id": "TP-test-consensus",
+    "task_state": "awaiting-review",
+    "codex_bin_present": true,
+    "evidence_files": ["diff.patch", "test-summary.md", "worker-handoff.json"]
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "gate-pass",
+    "retryable": false,
+    "driver_action": "advance",
+    "reason_substring": "GO"
+  }
+}

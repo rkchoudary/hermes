@@ -679,35 +679,48 @@ async function dispatchClaudeCodeCli(
   let lastTool = '';
   let lastFile = '';
   const THROTTLE_MS = 1000;
+  // L5 — progress sidecar (Codex critique: writing TaskPack on a 1Hz hot
+  // path without the lock is a lost-update footgun once watchdog,
+  // dashboard, postflight, recovery, and fan-out all mutate adjacent
+  // state). Hot progress lives in evidence/<task_id>/_progress.jsonl —
+  // append-only, lock-free, atomic on POSIX up to PIPE_BUF. TaskPack
+  // writes happen only at state-transition boundaries via withTaskPackLock.
+  const progressSidecarPath = path.join(
+    harnessRoot, '.agent-runs', runId, 'evidence', taskId, '_progress.jsonl',
+  );
+  try { fs.mkdirSync(path.dirname(progressSidecarPath), { recursive: true }); } catch { /* tolerate */ }
+  // L4.A — no-output progress watchdog state (updated by handleStdoutChunk).
+  let lastProgressAt = Date.now();
+  let noOutputWarned = false;
+  let noOutputSigtermSent = false;
   const updateWorkerPartial = (force = false): void => {
     const now = Date.now();
     if (!force && (now - lastWriteAt) < THROTTLE_MS) return;
     lastWriteAt = now;
+    const event = {
+      updated_at: new Date(now).toISOString(),
+      elapsed_sec: Math.round((now - start) / 1000),
+      tool_calls: toolCallsCount,
+      edits: editsCount,
+      last_tool: lastTool.slice(0, 60),
+      last_file: lastFile.slice(0, 120),
+      engine: 'claude-code-cli',
+      task_id: taskId,
+      run_id: runId,
+    };
     try {
-      const packPath = path.join(harnessRoot, '.agent-runs', runId, 'tasks', `${taskId}.json`);
-      if (!fs.existsSync(packPath)) return;
-      const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
-      pack.worker = pack.worker ?? {};
-      pack.worker.partial_progress = {
-        updated_at: new Date(now).toISOString(),
-        elapsed_sec: Math.round((now - start) / 1000),
-        tool_calls: toolCallsCount,
-        edits: editsCount,
-        last_tool: lastTool.slice(0, 60),
-        last_file: lastFile.slice(0, 120),
-        engine: 'claude-code-cli',
-      };
-      // Codex efficiency review (2026-04-29) #7: compact JSON on hot path.
-      // 1Hz partial_progress writes; pretty-print would 3× the write size.
-      // Final durable write goes through writeTaskPack (still pretty-printed
-      // for diff readability).
-      fs.writeFileSync(packPath, JSON.stringify(pack));
-    } catch { /* best-effort; final write is the source of truth */ }
+      // Append-only sidecar — lock-free, never touches TaskPack on hot path.
+      fs.appendFileSync(progressSidecarPath, JSON.stringify(event) + '\n');
+    } catch { /* best-effort; the watchdog tracker is independent */ }
   };
   const handleStdoutChunk = (buf: Buffer | string): void => {
     const s = typeof buf === 'string' ? buf : buf.toString('utf8');
     stdout += s;
     process.stdout.write(s);  // mirror to daemon log
+    // L4.A — any stdout chunk = activity signal; reset the no-output clock.
+    lastProgressAt = Date.now();
+    noOutputWarned = false;
+    noOutputSigtermSent = false;
     // Heuristic parsers — Claude Code CLI output formats vary
     const lines = s.split('\n');
     for (const line of lines) {
@@ -858,14 +871,49 @@ async function dispatchClaudeCodeCli(
       setTimeout(() => killTree('SIGKILL'), 10_000);
       errBox.value = new Error(`[timeout-${Math.round(workerTimeoutSec / 60)}m] worker timed out after ${workerTimeoutSec}s (no completion within budget)`);
     }, workerTimeoutSec * 1000);
+
+    // L4.A — no-output progress watchdog (fires every 30s).
+    // 2 min: warn (no kill); 5 min: SIGTERM the tree; 7 min: SIGKILL.
+    // Configurable via AUTO_NO_OUTPUT_*_SEC env vars; defaults below.
+    const noOutWarnSec = parseInt(process.env.AUTO_NO_OUTPUT_WARN_SEC ?? '120', 10);
+    const noOutTermSec = parseInt(process.env.AUTO_NO_OUTPUT_TERM_SEC ?? '300', 10);
+    const noOutKillSec = parseInt(process.env.AUTO_NO_OUTPUT_KILL_SEC ?? '420', 10);
+    const noOutputDisabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '0';
+    let noOutputTimedOut = false;
+    const watchdog = noOutputDisabled ? null : setInterval(() => {
+      const sinceProgressSec = Math.round((Date.now() - lastProgressAt) / 1000);
+      if (sinceProgressSec >= noOutKillSec) {
+        if (!timedOut) {
+          timedOut = true;
+          noOutputTimedOut = true;
+          console.error(`[no-output-watchdog] ${sinceProgressSec}s without progress (>= ${noOutKillSec}s SIGKILL threshold) — killing process group ${childPid ? '-' + childPid : '(no pid)'}`);
+          killTree('SIGKILL');
+          errBox.value = new Error(`[no-output-${Math.round(noOutKillSec / 60)}m] worker silent for ${sinceProgressSec}s (no stdout, no edits, no tool calls)`);
+        }
+      } else if (sinceProgressSec >= noOutTermSec && !noOutputSigtermSent) {
+        noOutputSigtermSent = true;
+        console.error(`[no-output-watchdog] ${sinceProgressSec}s without progress (>= ${noOutTermSec}s SIGTERM threshold) — sending SIGTERM`);
+        killTree('SIGTERM');
+        setTimeout(() => killTree('SIGKILL'), 30_000);
+      } else if (sinceProgressSec >= noOutWarnSec && !noOutputWarned) {
+        noOutputWarned = true;
+        console.warn(`[no-output-watchdog] ${sinceProgressSec}s without progress (>= ${noOutWarnSec}s warn threshold)`);
+      }
+    }, 30_000);
+
     child.on('error', (err) => {
       errBox.value = err as Error;
       clearTimeout(timer);
+      if (watchdog) clearInterval(watchdog);
       resolve();
     });
     child.on('exit', (code) => {
       clearTimeout(timer);
+      if (watchdog) clearInterval(watchdog);
       exitCode = code;
+      if (noOutputTimedOut && !errBox.value) {
+        errBox.value = new Error(`[no-output-watchdog] worker terminated by no-output watchdog`);
+      }
       updateWorkerPartial(true);  // final flush
       resolve();
     });

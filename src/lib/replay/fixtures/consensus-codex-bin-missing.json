@@ -1,0 +1,19 @@
+{
+  "fixture_id": "consensus-codex-bin-missing",
+  "purpose": "auto:consensus should emit precondition-fail when CODEX_BIN doesn't exist; driver must mark gate broken (NOT retry).",
+  "stage": "auto:consensus",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_id": "TP-test-consensus",
+    "codex_bin": "/Applications/Codex.app/Contents/Resources/codex",
+    "codex_bin_exists": false
+  },
+  "expected_outcome": {
+    "ok": false,
+    "kind": "precondition-fail",
+    "retryable": false,
+    "driver_action": "mark-gate-broken",
+    "reason_substring": "codex"
+  }
+}

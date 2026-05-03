@@ -1,0 +1,18 @@
+{
+  "fixture_id": "validation-success",
+  "purpose": "Stage 25 validation memo signed by validator role under solo-operator policy.",
+  "stage": "auto:validation",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "module": "M01",
+    "all_tasks_merged": true,
+    "validator_identity_present": true
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "fixture_id": "deploy-staging-success",
+  "purpose": "Stage 29 staging deploy of an approved + merged module.",
+  "stage": "auto:deploy-staging",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "module": "M01",
+    "approval_signed": true
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance"
+  }
+}

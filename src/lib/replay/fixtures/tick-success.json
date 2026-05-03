@@ -1,0 +1,14 @@
+{
+  "fixture_id": "tick-success",
+  "purpose": "Stage 27 tick + audit pack archive runs cleanly and writes state-log + override-audit entries.",
+  "stage": "auto:tick",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {},
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance"
+  }
+}

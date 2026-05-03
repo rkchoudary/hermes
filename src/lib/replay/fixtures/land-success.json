@@ -1,0 +1,20 @@
+{
+  "fixture_id": "land-success",
+  "purpose": "auto:land opens a PR + transitions pack to merged when worktree is clean and gh is authenticated.",
+  "stage": "auto:land",
+  "harness_version_at_capture": "h-40ca082",
+  "captured_at": "(synthetic)",
+  "input": {
+    "task_state": "ready-for-merge",
+    "gh_authenticated": true,
+    "worktree_clean": true,
+    "branch_name": "claude/feat-m01"
+  },
+  "expected_outcome": {
+    "ok": true,
+    "kind": "success",
+    "retryable": false,
+    "driver_action": "advance",
+    "reason_substring": "PR"
+  }
+}
