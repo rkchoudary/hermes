@@ -85,6 +85,7 @@ const validateCitations = (_content: string): { findings: CitationFinding[] } =>
 import { evaluateLlmBudget, formatBudgetEvaluation } from '../lib/llmBudget';
 import { readBugReview } from '../lib/diagnostics';
 import { requireHarnessDriver, extractOverrideReason } from '../lib/harnessGuard';
+import { spawnWorkerInDocker, dockerPreflightCheck } from '../lib/dockerWorker';
 
 // ─── Engine definition ────────────────────────────────────────────────────────
 
@@ -839,25 +840,60 @@ async function dispatchClaudeCodeCli(
   // but the kill ladder takes longer than expected when the child is itself
   // wedged. Fix: spawn detached so claude becomes its own session/process-group
   // leader, then send signals to the *negative pid* to kill the whole group.
+  // L6 — when AUTO_WORKER_USE_DOCKER=1, dispatch via container.
+  const useDocker = process.env.AUTO_WORKER_USE_DOCKER === '1';
+  if (useDocker) {
+    const preflight = await dockerPreflightCheck();
+    if (preflight) {
+      errBox.value = new Error(`[docker-preflight-fail] ${preflight}`);
+      console.error(`[claude-code-cli] docker preflight failed: ${preflight}`);
+    } else {
+      console.log(`[claude-code-cli] docker mode: spawning hermes-worker container`);
+    }
+  }
+
   let timedOut = false;
   await new Promise<void>((resolve) => {
-    const child = spawn('claude', claudeArgs, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,  // claude → new session; signal -pid kills whole tree
-    });
-    const childPid = child.pid;
-    const killTree = (sig: NodeJS.Signals): void => {
-      if (!childPid) { try { child.kill(sig); } catch { /* gone */ } return; }
-      try { process.kill(-childPid, sig); } catch {
-        // process group gone; try direct PID as fallback
-        try { child.kill(sig); } catch { /* gone */ }
+    let child: import('node:child_process').ChildProcess;
+    let killTree: (sig: NodeJS.Signals) => void;
+
+    if (useDocker && !errBox.value) {
+      const evDirPath = path.join(harnessRoot, '.agent-runs', runId, 'evidence', taskId);
+      try { fs.mkdirSync(evDirPath, { recursive: true }); } catch { /* tolerate */ }
+      const handles = spawnWorkerInDocker({
+        taskId,
+        worktreeHostPath: cwd,
+        evidenceHostPath: evDirPath,
+        workerArgs: ['claude', ...claudeArgs],
+        stdin: prompt,
+      });
+      child = handles.child;
+      killTree = handles.kill;
+      console.log(`[claude-code-cli] docker container: ${handles.containerName}`);
+    } else {
+      const c = spawn('claude', claudeArgs, {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        detached: true,  // claude → new session; signal -pid kills whole tree
+      });
+      child = c;
+      const childPid = c.pid;
+      killTree = (sig: NodeJS.Signals): void => {
+        if (!childPid) { try { c.kill(sig); } catch { /* gone */ } return; }
+        try { process.kill(-childPid, sig); } catch {
+          try { c.kill(sig); } catch { /* gone */ }
+        }
+      };
+      if (c.stdin) {
+        c.stdin.write(prompt);
+        c.stdin.end();
       }
-    };
-    if (child.stdin) {
-      child.stdin.write(prompt);
-      child.stdin.end();
     }
+    if (useDocker && errBox.value) {
+      resolve();
+      return;
+    }
+    const childPid = child.pid;
     child.stdout?.on('data', handleStdoutChunk);
     child.stderr?.on('data', (buf) => {
       const s = buf.toString('utf8');

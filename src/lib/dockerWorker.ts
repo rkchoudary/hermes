@@ -69,6 +69,22 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
   // extractor's output.
   const credsPath = process.env.HARNESS_CLAUDE_CREDS_PATH
     ?? path.join(home, '.harness', 'claude-credentials.json');
+  // NOTE: --read-only is intentionally OMITTED. claude-code-cli refreshes
+  // OAuth tokens on demand and writes the new accessToken back to its
+  // credentials file. With --read-only + a :ro credentials mount, that
+  // write fails silently and claude exits 1s with no output (verified
+  // 2026-05-03 drive test).
+  //
+  // Blast-radius is still contained: the only host paths the container
+  // can write to are the explicit bind mounts (/work, /evidence, and the
+  // credentials file). The container's own filesystem layer is
+  // copy-on-write and dropped on --rm exit. Other host paths are
+  // unreachable.
+  //
+  // The credentials mount is RW (not :ro) so claude can persist refreshed
+  // tokens — which is desirable: the host file stays in sync with the
+  // newest accessToken, and the next host-side claude call doesn't need
+  // a fresh extraction from Keychain.
   const args: string[] = [
     'run',
     '--rm',
@@ -77,20 +93,14 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
     '--memory', opts.memory ?? DEFAULT_MEMORY,
     '--cpus', String(opts.cpus ?? DEFAULT_CPUS),
     '--pids-limit', String(opts.pidsLimit ?? DEFAULT_PIDS_LIMIT),
-    '--read-only',
-    '--tmpfs', '/tmp',
-    // Writable HOME so claude-cli can drop runtime caches; the only
-    // explicit mount under it is the credentials file (everything else
-    // is ephemeral, dropped when the container exits).
-    '--tmpfs', '/home/worker',
     // Worktree (rw) — claude reads + writes here
     '-v', `${opts.worktreeHostPath}:/work:rw`,
     // Evidence dir (rw) — diff.patch, test-summary.md, etc.
     '-v', `${opts.evidenceHostPath}:/evidence:rw`,
-    // Claude max plan credentials (ro). Single-file mount so we don't
-    // expose the whole host ~/.claude (history.jsonl, sessions/, etc.).
-    '-v', `${credsPath}:/home/worker/.claude/.credentials.json:ro`,
-    // gh CLI auth (ro)
+    // Claude max plan credentials (RW so token refresh round-trips back
+    // to the host file).
+    '-v', `${credsPath}:/home/worker/.claude/.credentials.json:rw`,
+    // gh CLI auth (ro is fine — gh refreshes don't round-trip)
     '-v', `${path.join(home, '.config/gh')}:/home/worker/.config/gh:ro`,
     // Don't mount ssh keys — force HTTPS auth for git
     // stdin in/stdout/stderr piped via -i (interactive but non-tty)
