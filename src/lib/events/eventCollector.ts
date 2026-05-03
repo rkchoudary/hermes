@@ -95,7 +95,7 @@ export function quarantinePath(harnessRoot: string, runId: string, taskId: strin
 
 // ─── Per-task collector state (cached per process) ──────────────────────
 
-interface CollectorState {
+export interface CollectorState {
   harnessRoot: string;
   runId: string;
   taskId: string;
