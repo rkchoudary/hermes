@@ -2,13 +2,13 @@
 
 Following the initial 5-gap-fix proof in [E2E-VALIDATION.md](E2E-VALIDATION.md), we extended the test by driving multiple modules through the full lifecycle: plan → work → land → CI → merge.
 
-## Result: 3 modules merged to main via OSS Hermes
+## Result: 4 modules merged to main via OSS Hermes
 
 | Module | PR | Worker time | Diff size | Outcome |
 |---|---|---|---|---|
 | **M01** GL/Sub-Ledger Data Ingestion | [#77](https://github.com/rkchoudary/ProjectXV4/pull/77) | 297s | 4,489 lines | ✅ MERGED |
 | **M02** Financial Data Warehouse (FDW) | [#78](https://github.com/rkchoudary/ProjectXV4/pull/78) | 1,195s | 152.5 KB | ✅ MERGED |
-| **M03** Chart of Accounts | [#79](https://github.com/rkchoudary/ProjectXV4/pull/79) | 658s | — | ❌ CI failed (`@nbf/web#test:unit`) |
+| **M03** Chart of Accounts | [#79](https://github.com/rkchoudary/ProjectXV4/pull/79) | 658s | — | ✅ MERGED (after CI re-run; failures were pre-existing flaky infra, not M03's code) |
 | **M04** Multi-Entity Consolidation | [#80](https://github.com/rkchoudary/ProjectXV4/pull/80) | 1,766s | — | ✅ MERGED |
 | **M05** Core Budgeting | — | hung | — | ❌ Worker did not complete (Claude Code CLI hang ~1h) |
 
@@ -54,7 +54,11 @@ Each module had:
 
 **Two operational findings** (legitimate v0.2 work, not bugs):
 
-1. **Sequential merges break sibling tests** — M01 and M02 merged successfully. When M03's PR ran CI, it failed at `@nbf/web#test:unit`. The worker's local test suite passed (verified at dispatch time), but on CI against post-M01/M02 main, sibling-package tests broke. This is a real regulated-workload pattern: parallel module work needs test-isolation discipline. Not a Hermes bug — it's a project-workflow signal.
+1. **CI flakiness on shared GitHub runners** — M03's first CI run failed on two unrelated infra issues:
+   - `@nbf/canonical-json-rfc8785#lint` — script invokes `eslint` but eslint isn't in that package's `node_modules`. Pre-existing in `main` for that package; M03 didn't touch it.
+   - `@nbf/web#test:unit` — `src/lib/store/__tests__/performance.test.ts:96` asserts `<10ms` but got `17ms` on a slow runner window. Timing-based perf test; flake.
+
+   Re-running CI on the same SHA passed cleanly. M03 was then merged. **Conclusion: not a Hermes bug, not an M03 code issue. Project-side housekeeping** — the perf test should be quarantined or relaxed; the eslint dep should be added to `canonical-json-rfc8785/package.json`.
 
 2. **Long-running Claude Code dispatches can stall** — M05's worker started but produced no output after ~1 hour and was killed. This is a known Claude Code CLI behavior under certain prompt patterns. Mitigation: per-module 90-min timeout exists in driver scripts; the bare `auto:work` invocation doesn't enforce it. v0.2 work: hoist the timeout into `auto:work` itself.
 
