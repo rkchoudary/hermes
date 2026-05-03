@@ -63,6 +63,12 @@ const DEFAULT_PIDS_LIMIT = parseInt(process.env.AUTO_WORKER_DOCKER_PIDS_LIMIT ||
 export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: string; args: string[] } {
   const containerName = `hermes-worker-${opts.taskId.toLowerCase()}-${Date.now()}`;
   const home = os.homedir();
+  // claude max plan auth on macOS lives in Keychain Services. The
+  // extractor (docker/extract-claude-creds.sh) reads it out into a
+  // file the Linux container can mount. Default path matches the
+  // extractor's output.
+  const credsPath = process.env.HARNESS_CLAUDE_CREDS_PATH
+    ?? path.join(home, '.harness', 'claude-credentials.json');
   const args: string[] = [
     'run',
     '--rm',
@@ -73,13 +79,17 @@ export function buildDockerArgs(opts: DockerSpawnOptions): { containerName: stri
     '--pids-limit', String(opts.pidsLimit ?? DEFAULT_PIDS_LIMIT),
     '--read-only',
     '--tmpfs', '/tmp',
-    '--tmpfs', '/home/worker/.cache',
+    // Writable HOME so claude-cli can drop runtime caches; the only
+    // explicit mount under it is the credentials file (everything else
+    // is ephemeral, dropped when the container exits).
+    '--tmpfs', '/home/worker',
     // Worktree (rw) — claude reads + writes here
     '-v', `${opts.worktreeHostPath}:/work:rw`,
     // Evidence dir (rw) — diff.patch, test-summary.md, etc.
     '-v', `${opts.evidenceHostPath}:/evidence:rw`,
-    // Claude max plan auth (ro)
-    '-v', `${path.join(home, '.claude')}:/home/worker/.claude:ro`,
+    // Claude max plan credentials (ro). Single-file mount so we don't
+    // expose the whole host ~/.claude (history.jsonl, sessions/, etc.).
+    '-v', `${credsPath}:/home/worker/.claude/.credentials.json:ro`,
     // gh CLI auth (ro)
     '-v', `${path.join(home, '.config/gh')}:/home/worker/.config/gh:ro`,
     // Don't mount ssh keys — force HTTPS auth for git
@@ -142,11 +152,13 @@ export async function dockerPreflightCheck(image?: string, network?: string): Pr
   if (netResult.exitCode !== 0) {
     return `docker network ${net} not found — run: bash docker/setup-egress-bridge.sh`;
   }
-  // Auth dirs exist on host?
+  // Auth: extracted credentials file (macOS Keychain → file) + gh dir.
   const home = os.homedir();
   const fs = await import('node:fs');
-  if (!fs.existsSync(path.join(home, '.claude'))) {
-    return `~/.claude not found on host — claude max plan must be authenticated locally before running in docker mode`;
+  const credsPath = process.env.HARNESS_CLAUDE_CREDS_PATH
+    ?? path.join(home, '.harness', 'claude-credentials.json');
+  if (!fs.existsSync(credsPath)) {
+    return `${credsPath} not found — run docker/extract-claude-creds.sh to extract claude max plan auth from Keychain (macOS) or run 'claude' once on Linux to populate ~/.claude/.credentials.json (then symlink to ${credsPath})`;
   }
   if (!fs.existsSync(path.join(home, '.config/gh'))) {
     return `~/.config/gh not found on host — gh CLI must be authenticated locally (run \`gh auth login\`)`;

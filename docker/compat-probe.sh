@@ -59,18 +59,27 @@ else
   exit 1
 fi
 
-# ─── Probe 3: claude in container with mounted auth ───────────────────
+# ─── Probe 3: claude in container with extracted credentials ─────────
 echo ""
 echo "3. claude-code-cli inside container"
-if [ ! -d "$HOME/.claude" ]; then
-  fail "$HOME/.claude not present on host — claude max plan must be authenticated locally first"
+# On macOS, claude max plan auth lives in Keychain (not ~/.claude).
+# Run the extractor so we have a credentials file the Linux container
+# can actually read.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if ! bash "$HERE/extract-claude-creds.sh" >/dev/null 2>&1; then
+    fail "extract-claude-creds.sh failed — Keychain unreachable or no claude-code-cli auth on host"
+  fi
+fi
+CREDS_PATH="${HARNESS_CLAUDE_CREDS_PATH:-$HOME/.harness/claude-credentials.json}"
+if [ ! -f "$CREDS_PATH" ]; then
+  fail "$CREDS_PATH not present — run docker/extract-claude-creds.sh (macOS) or 'claude' on Linux to populate"
 else
   if docker run --rm \
-      -v "$HOME/.claude:/home/worker/.claude:ro" \
+      -v "$CREDS_PATH:/home/worker/.claude/.credentials.json:ro" \
       "$IMAGE" claude --version >/dev/null 2>&1; then
-    ok "claude --version works with mounted ~/.claude"
+    ok "claude --version works with mounted credentials file"
   else
-    fail "claude --version failed inside container — auth mount or binary path issue"
+    fail "claude --version failed inside container — credentials mount or binary path issue"
   fi
 fi
 
@@ -105,22 +114,29 @@ else
 fi
 rm -rf "$PROBE_TMP"
 
-# ─── Probe 6: claude --print latency ──────────────────────────────────
+# ─── Probe 6: claude --print latency + AUTH ───────────────────────────
 echo ""
-echo "6. claude --print latency (single token round-trip)"
-if [ -d "$HOME/.claude" ]; then
+echo "6. claude --print latency + auth (single token round-trip)"
+if [ -f "$CREDS_PATH" ]; then
   start=$(date +%s)
   out=$(docker run --rm \
-      -v "$HOME/.claude:/home/worker/.claude:ro" \
-      "$IMAGE" sh -c 'echo "Reply with one word: hello" | claude --print --dangerously-skip-permissions' 2>/dev/null | head -c 200)
+      -v "$CREDS_PATH:/home/worker/.claude/.credentials.json:ro" \
+      "$IMAGE" sh -c 'echo "Reply with one word: hello" | claude --print --dangerously-skip-permissions' 2>/dev/null | head -c 400)
   dur=$(( $(date +%s) - start ))
-  if [ -n "$out" ] && [ $dur -lt 60 ]; then
-    ok "claude --print returned in ${dur}s ($(echo "$out" | head -c 40)...)"
+  # Hard-fail on auth-class errors. Soft-fail on perf threshold.
+  if echo "$out" | grep -qiE 'not logged in|please run /login|authentication required|no api key|unauthorized|invalid_grant|token expired'; then
+    fail "claude inside container returned NOT-LOGGED-IN even with extracted credentials"
+    echo "    Output: $(echo "$out" | head -c 80)..."
+    echo "    Try re-running 'claude' on the host once to refresh tokens, then re-extract."
+  elif [ -z "$out" ]; then
+    fail "claude --print returned no output (model routing or network)"
   elif [ $dur -ge 60 ]; then
     fail "claude --print took ${dur}s (>60s threshold) — Apple Silicon perf concern"
   else
-    fail "claude --print returned no output (auth or model-routing issue)"
+    ok "claude --print returned in ${dur}s + authenticated ($(echo "$out" | head -c 40)...)"
   fi
+else
+  fail "$CREDS_PATH missing — probe #3 should have created it"
 fi
 
 # ─── Probe 7: egress allowlist ────────────────────────────────────────
