@@ -1024,10 +1024,19 @@ async function dispatchClaudeCodeCli(
     const noOutKillSec = parseInt(process.env.AUTO_NO_OUTPUT_KILL_SEC ?? '420', 10);
     const noOutputExplicitlyDisabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '0';
     const noOutputExplicitlyEnabled = process.env.AUTO_NO_OUTPUT_WATCHDOG === '1';
+    // T1.1 safety: when events-v1 is active, livenessPoller (PA4+PA5)
+    // owns kill decisions via typed verdicts. Auto-disable the legacy
+    // stdout-heuristic watchdog so two reapers don't fight (the typed
+    // verdict is strictly more informed). Operator can force-enable
+    // both layers with AUTO_NO_OUTPUT_WATCHDOG=1.
+    const eventsV1OwnsKill = eventsV1Enabled && eventCollector !== null;
     const noOutputDisabled = noOutputExplicitlyDisabled
-      || (useDocker && !noOutputExplicitlyEnabled);
+      || (useDocker && !noOutputExplicitlyEnabled)
+      || (eventsV1OwnsKill && !noOutputExplicitlyEnabled);
     if (noOutputDisabled && useDocker) {
       console.log('[no-output-watchdog] disabled in docker mode (set AUTO_NO_OUTPUT_WATCHDOG=1 to force-enable; total-elapsed ceiling still applies)');
+    } else if (noOutputDisabled && eventsV1OwnsKill) {
+      console.log('[no-output-watchdog] disabled — livenessPoller owns kill decisions under AUTO_HERMES_EVENTS_V1=1 (set AUTO_NO_OUTPUT_WATCHDOG=1 to force both)');
     }
     let noOutputTimedOut = false;
     const watchdog = noOutputDisabled ? null : setInterval(() => {

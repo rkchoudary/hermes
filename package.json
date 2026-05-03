@@ -61,6 +61,8 @@
     "auto:test:liveness": "tsx src/lib/__tests__/liveness.smoke.ts",
     "auto:test:chaos": "tsx src/lib/__tests__/chaos.smoke.ts",
     "auto:test:tenant": "tsx src/lib/tenant/__tests__/tenant.smoke.ts",
+    "auto:test:oidc": "tsx src/lib/identity/__tests__/oidc.smoke.ts",
+    "auto:test:identity": "tsx src/lib/identity/__tests__/identity.smoke.ts",
     "auto:export-evidence": "tsx src/cli/export-evidence.ts",
     "auto:test:budget-reservation": "tsx src/lib/__tests__/budgetReservation.smoke.ts",
     "auto:test:progress-score": "tsx src/lib/__tests__/progressScore.smoke.ts",
@@ -132,6 +134,9 @@
     "auto:engine-list": "tsx -e \"import('./src/lib/engineRegistry.ts').then(m => console.log(m.describeRegistry()))\""
   },
   "dependencies": {
+    "@types/pg": "^8.20.0",
+    "jose": "^6.2.3",
+    "pg": "^8.20.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {

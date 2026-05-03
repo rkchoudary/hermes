@@ -33,6 +33,8 @@ const SMOKES = [
   'auto:test:liveness',
   'auto:test:chaos',
   'auto:test:tenant',
+  'auto:test:oidc',
+  'auto:test:identity',
   'auto:test:budget-reservation',
   'auto:test:progress-score',
   'auto:test:fanout-scheduler',
