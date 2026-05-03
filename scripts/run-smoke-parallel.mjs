@@ -32,6 +32,7 @@ const SMOKES = [
   'auto:test:claude-stream',
   'auto:test:liveness',
   'auto:test:chaos',
+  'auto:test:tenant',
   'auto:test:budget-reservation',
   'auto:test:progress-score',
   'auto:test:fanout-scheduler',

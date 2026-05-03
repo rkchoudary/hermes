@@ -86,6 +86,9 @@ import { evaluateLlmBudget, formatBudgetEvaluation } from '../lib/llmBudget';
 import { readBugReview } from '../lib/diagnostics';
 import { requireHarnessDriver, extractOverrideReason } from '../lib/harnessGuard';
 import { spawnWorkerInDocker, dockerPreflightCheck } from '../lib/dockerWorker';
+import { openCollector as openEventCollector, closeCollector as closeEventCollector, appendEvent as appendLedgerEvent } from '../lib/events/eventCollector';
+import { createAdapter, feedChunk as feedAdapterChunk, drainBuffer as drainAdapterBuffer } from '../lib/engines/claudeStreamAdapter';
+import { startPoller, actionToSignal, fsMutationCounter } from '../lib/livenessPoller';
 
 // ─── Engine definition ────────────────────────────────────────────────────────
 
@@ -852,6 +855,44 @@ async function dispatchClaudeCodeCli(
     }
   }
 
+  // PA-wire — Phase A activation (opt-in via AUTO_HERMES_EVENTS_V1=1).
+  // When enabled:
+  //   - claude --print runs with --output-format stream-json --verbose
+  //   - stdout flows through claudeStreamAdapter into the host-owned
+  //     event ledger (PA1+PA2)
+  //   - livenessPoller (PA4+PA5) periodically computes verdicts and
+  //     routes recommended_action onto killTree()
+  //   - Replaces the L4.A no-output watchdog stdout heuristics with
+  //     typed-event-driven kill decisions
+  //
+  // Default-off so existing dispatches keep working unchanged. Flip to
+  // default-on after the next live drive test confirms parity.
+  const eventsV1Enabled = process.env.AUTO_HERMES_EVENTS_V1 === '1';
+  let eventCollector: ReturnType<typeof openEventCollector> | null = null;
+  let streamAdapter: ReturnType<typeof createAdapter> | null = null;
+  let livenessHandle: ReturnType<typeof startPoller> | null = null;
+  let livenessKillRequested: NodeJS.Signals | null = null;
+  if (eventsV1Enabled) {
+    try {
+      eventCollector = openEventCollector({ harnessRoot, runId, taskId });
+      streamAdapter = createAdapter({ collector: eventCollector });
+      claudeArgs.push('--output-format', 'stream-json', '--verbose');
+      console.log('[hermes-events-v1] event ledger + claude stream adapter ACTIVE');
+      // Stamp dispatch-started in the ledger
+      appendLedgerEvent(eventCollector, {
+        source: 'control-plane',
+        kind: 'cp.dispatch_started',
+        payload: { task_id: taskId, run_id: runId, engine: 'claude-code-cli', use_docker: useDocker },
+        task_id: taskId,
+        run_id: runId,
+      });
+    } catch (err) {
+      console.error(`[hermes-events-v1] activation failed: ${(err as Error).message} — falling back to legacy stdout parsing`);
+      eventCollector = null;
+      streamAdapter = null;
+    }
+  }
+
   let timedOut = false;
   await new Promise<void>((resolve) => {
     let child: import('node:child_process').ChildProcess;
@@ -903,11 +944,62 @@ async function dispatchClaudeCodeCli(
     }
     const childPid = child.pid;
     child.stdout?.on('data', handleStdoutChunk);
+    // PA-wire — also feed adapter when events-v1 is active. Dual-feed
+    // is intentional: legacy stdout parser stays in place during the
+    // opt-in rollout so dashboards / state-log don't break.
+    if (eventsV1Enabled && streamAdapter) {
+      child.stdout?.on('data', (buf) => {
+        try { feedAdapterChunk(streamAdapter!, buf); }
+        catch (err) {
+          console.error(`[hermes-events-v1] adapter feed failed: ${(err as Error).message}`);
+        }
+      });
+    }
     child.stderr?.on('data', (buf) => {
       const s = buf.toString('utf8');
       stderr += s;
       process.stderr.write(s);
     });
+
+    // PA-wire — start liveness poller (replaces L4.A's stdout heuristic
+    // when events-v1 is active). Poller fires every 30s, computes
+    // verdict from event ledger + filesystem mutation rate, routes
+    // recommended_action onto killTree.
+    if (eventsV1Enabled && eventCollector) {
+      // FS mutation supplier: count mtimes in the cwd recently. Cheap
+      // proxy; full implementation reads pack.allowed_paths.
+      const fsCounter = fsMutationCounter([cwd], 60);
+      livenessHandle = startPoller({
+        collector: eventCollector,
+        fsMutationsSupplier: fsCounter,
+        intervalMs: 30_000,
+        onVerdict: (verdict) => {
+          const sig = actionToSignal(verdict.recommended_action);
+          if (sig && !timedOut) {
+            console.error(`[liveness] verdict=${verdict.kind} confidence=${verdict.confidence} reason="${verdict.reason ?? ''}" → ${verdict.recommended_action}`);
+            if (eventCollector) {
+              try {
+                appendLedgerEvent(eventCollector, {
+                  source: 'control-plane',
+                  kind: 'cp.kill_decided',
+                  payload: {
+                    verdict_at_kill: verdict,
+                    kill_signal: sig,
+                  },
+                  task_id: taskId,
+                  run_id: runId,
+                });
+              } catch { /* best-effort */ }
+            }
+            timedOut = true;
+            livenessKillRequested = sig;
+            killTree(sig);
+            if (sig === 'SIGTERM') setTimeout(() => killTree('SIGKILL'), 30_000);
+            errBox.value = new Error(`[liveness-${verdict.kind}] ${verdict.reason ?? 'no recommended_action reason'}`);
+          }
+        },
+      });
+    }
     const timer = setTimeout(() => {
       timedOut = true;
       console.error(`[claude-code-cli] worker timed out after ${workerTimeoutSec}s — killing process group ${childPid ? '-' + childPid : '(no pid)'}`);
@@ -971,6 +1063,30 @@ async function dispatchClaudeCodeCli(
       exitCode = code;
       if (noOutputTimedOut && !errBox.value) {
         errBox.value = new Error(`[no-output-watchdog] worker terminated by no-output watchdog`);
+      }
+      // PA-wire — drain adapter buffer + stop poller + emit
+      // dispatch_finished. Best-effort; never fail the resolve().
+      if (eventsV1Enabled) {
+        try {
+          if (streamAdapter) drainAdapterBuffer(streamAdapter);
+          if (livenessHandle) livenessHandle.stop();
+          if (eventCollector) {
+            appendLedgerEvent(eventCollector, {
+              source: 'control-plane',
+              kind: 'cp.dispatch_finished',
+              payload: {
+                exit_code: exitCode,
+                killed_by_liveness: livenessKillRequested,
+                ok: exitCode === 0 && !errBox.value,
+              },
+              task_id: taskId,
+              run_id: runId,
+            });
+            closeEventCollector(runId, taskId);
+          }
+        } catch (err) {
+          console.error(`[hermes-events-v1] cleanup error: ${(err as Error).message}`);
+        }
       }
       updateWorkerPartial(true);  // final flush
       resolve();
