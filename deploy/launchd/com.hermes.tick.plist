@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hermes tick launchd unit (macOS).
+
+  The "tick" is the periodic housekeeping pass: flush progress, reap stale
+  workers, drain blocked queue, run cleanup policies, optionally auto-promote
+  + auto-land. Runs every 15 minutes by default.
+
+  Install:
+    1. cp deploy/launchd/com.hermes.tick.plist ~/Library/LaunchAgents/
+    2. Edit: replace HERMES_REPO_PATH and HERMES_NODE_PATH (see the daemon
+       plist for context).
+    3. launchctl load ~/Library/LaunchAgents/com.hermes.tick.plist
+
+  This unit is COMPLEMENTARY to the daemon, not a replacement. The daemon
+  spawns workers + dispatches consensus + auto-promotes (continuous loop).
+  The tick handles cron-style work (flush, reap, drain, cleanup) on a fixed
+  cadence. You can run either or both — typical production setups run both.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hermes.tick</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>HERMES_NODE_PATH/bin/node</string>
+    <string>HERMES_REPO_PATH/node_modules/.bin/tsx</string>
+    <string>HERMES_REPO_PATH/src/cli/tick.ts</string>
+    <string>--verbose</string>
+    <!-- Default opt-ins for unattended ops. Operator must explicitly accept by
+         leaving these in. Comment out for dry-run-only mode. -->
+    <string>--auto-promote</string>
+    <string>--auto-land</string>
+    <!-- Add --apply-land here to authorize REAL merge for tasks whose
+         pack.auto_land_policy.real_merge_enabled === true. Without
+         --apply-land, eligible tasks get a Slack DRY-RUN report only. -->
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>HERMES_REPO_PATH</string>
+
+  <!-- Every 900 seconds (15 minutes). Adjust StartInterval for different
+       cadence. Tick is idempotent + bounded, so cadence is operator choice. -->
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>HERMES_REPO_PATH/.agent-runs/_launchd-tick.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>HERMES_REPO_PATH/.agent-runs/_launchd-tick.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>

@@ -1,0 +1,39 @@
+# Hermes tick systemd unit (Linux). Triggered by hermes-tick.timer.
+#
+# The tick is the periodic housekeeping pass: flush, reap, drain, cleanup,
+# auto-promote, auto-land. One-shot per fire; the timer schedules it.
+#
+# Install:
+#   1. Copy hermes-tick.service AND hermes-tick.timer to /etc/systemd/system/
+#   2. Edit User=, WorkingDirectory=, ExecStart= to match your install
+#   3. systemctl daemon-reload
+#   4. systemctl enable --now hermes-tick.timer
+#   5. journalctl -u hermes-tick.service -f
+
+[Unit]
+Description=Hermes autonomous-delivery tick (housekeeping + auto-promote + auto-land)
+Documentation=https://github.com/rkchoudary/hermes/blob/main/docs/DURABLE-ORCHESTRATION.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+
+WorkingDirectory=/opt/hermes
+ExecStart=/usr/bin/node /opt/hermes/node_modules/.bin/tsx /opt/hermes/src/cli/tick.ts --verbose --auto-promote --auto-land
+
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+# Add --apply-land to ExecStart and uncomment to authorize REAL merges.
+# Environment="AUTO_AUTO_LAND_APPLY=1"
+
+# Same hardening as the daemon.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/opt/hermes
+
+# Bounded — tick should never run more than a couple of minutes.
+TimeoutStartSec=600

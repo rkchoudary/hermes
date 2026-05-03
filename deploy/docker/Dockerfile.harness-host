@@ -1,0 +1,99 @@
+# Hermes harness-host container.
+#
+# This is the LONG-RUNNING orchestrator container — the daemon that spawns
+# workers, runs tick on a cron, and exposes the dashboard. It is NOT the
+# worker container (see ../docker/Dockerfile in the repo root for that).
+#
+# Build:
+#   docker build -f deploy/docker/Dockerfile.harness-host -t hermes-host:latest .
+#
+# Run:
+#   docker run -d \
+#     --name hermes-host \
+#     -v $(pwd)/.agent-runs:/opt/hermes/.agent-runs \
+#     -v ~/.claude:/home/hermes/.claude:ro \
+#     -e AUTO_DAEMON_SLACK_WEBHOOK=$SLACK \
+#     -p 4500:4500 \
+#     hermes-host:latest
+#
+# What's in the container:
+#   - Node 20 LTS
+#   - pnpm 9
+#   - Docker CLI (so the harness-host can spawn worker containers via
+#     /var/run/docker.sock — Docker-out-of-Docker pattern; mount the host's
+#     docker socket at runtime)
+#   - claude CLI (Claude Code; bundled via npm)
+#   - codex CLI (optional; bundled if you set BUNDLE_CODEX=1 at build time)
+#   - gh CLI (for auto:land)
+#   - The full Hermes harness installed from this repo
+#
+# Volume layout (mount these from the host):
+#   /opt/hermes/.agent-runs   — task state, evidence, audit logs (PERSIST)
+#   /home/hermes/.claude      — claude CLI credentials (READ-ONLY)
+#   /var/run/docker.sock      — Docker socket for spawning workers
+#
+# The container's daemon talks to the host Docker daemon to spawn workers,
+# rather than running workers in the same container (avoids nested-docker pain
+# and lets workers be reaped independently).
+
+FROM node:20-bookworm-slim AS base
+
+# System deps. tini for proper PID-1 signal handling; build-essential because
+# some optional native modules (better-sqlite3, etc.) need a C compiler at
+# install time. ca-certificates for fetching from registries + GitHub.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      tini \
+      git \
+      curl \
+      ca-certificates \
+      build-essential \
+      gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# GitHub CLI for auto:land (gh pr merge).
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Docker CLI (so harness can spawn worker containers via the host socket).
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# pnpm — the harness uses pnpm scripts pervasively.
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+# claude CLI (Claude Code) — primary engine. Pinned to the version range the
+# stream-json adapter was tested against. Override at build time:
+#   --build-arg CLAUDE_CLI_VERSION=@anthropic-ai/claude-code@latest
+ARG CLAUDE_CLI_VERSION="@anthropic-ai/claude-code@latest"
+RUN npm install -g ${CLAUDE_CLI_VERSION}
+
+# Unprivileged runtime user. The harness should never need root.
+RUN useradd --create-home --shell /bin/bash --uid 1000 hermes
+USER hermes
+WORKDIR /opt/hermes
+
+# Install dependencies first (better layer cache).
+COPY --chown=hermes:hermes package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Copy the harness sources.
+COPY --chown=hermes:hermes . .
+
+# Persist .agent-runs on a volume; declare it so docker mounts it cleanly.
+VOLUME ["/opt/hermes/.agent-runs"]
+
+# Expose the live dashboard SSE port (auto:dashboard default).
+EXPOSE 4500
+
+# tini → daemon. Daemon handles SIGTERM; tini ensures clean exit even if a
+# child worker stalls.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command: run the daemon in the foreground. Override with `tick` or
+# `dashboard` for one-shot or alternate entry points.
+CMD ["pnpm", "auto:daemon"]

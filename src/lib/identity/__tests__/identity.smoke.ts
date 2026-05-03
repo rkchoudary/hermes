@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import type { Principal as PrincipalRecord } from '../../tenant/model';
 import { _resetHarnessRootCacheForTest } from '../../harnessRoot';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-identity-'));
@@ -186,7 +187,7 @@ assert(after2.effective_until !== null, 'effective_until set');
 // 2e. Viewer base RBAC denies dispatch.start (use a fresh principal id
 //     to avoid the active-elevation log granting it via bob's existing
 //     elevation).
-const fakeViewer: Principal = { ...bob, id: 'fake-viewer-no-elevations' };
+const fakeViewer: PrincipalRecord = { ...bob, id: 'fake-viewer-no-elevations' };
 assert(!hasElevatedPermission(fakeViewer, 'acme', 'dispatch.start').allowed, 'viewer base RBAC denies dispatch.start');
 // 2f. Bob (now elevated to admin via approved request) has dispatch.start
 const bobNow = hasElevatedPermission(bob, 'acme', 'dispatch.start');

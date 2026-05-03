@@ -29,15 +29,24 @@
  *     ANTHROPIC_API_KEY=sk-…
  *     AUTO_ALLOW_API_BILLING=1     # explicit opt-in; refuses dispatch otherwise
  *
- * v0.1 STUB — this implementation defines the loop interface + dry-run mode.
- * v0.2 implements the actual loop:
- *   - Spawns pnpm auto:work as background processes
- *   - Tracks worker PIDs + heartbeat timestamps
- *   - Dispatches pnpm auto:consensus when worker writes "awaiting-review"
- *   - Auto-promotes on Codex GO
- *   - Sends Slack notifications via webhook
- *   - Handles SIGTERM cleanly (lets in-flight workers finish)
- *   - Daily budget tracking + pause-when-exhausted
+ * Status (2026-05-03): FULL IMPLEMENTATION. The "v0.1 STUB" framing in earlier
+ * revisions was historical — the loop has been functional for several
+ * sprints. Current behavior:
+ *   - Spawns `pnpm auto:work` as detached background processes (line ~140)
+ *   - Tracks worker PIDs + heartbeats via the process registry
+ *     (src/lib/processWatchdog.ts) for cross-tick reaping
+ *   - Dispatches `pnpm auto:consensus` on `awaiting-review` transitions
+ *   - Auto-promotes on Codex GO via `pnpm auto:promote` (when policy enabled)
+ *   - Reads `_task-queue.json` for cross-task path-overlap coordination
+ *     (taskQueue.ts; prevents two workers from clobbering the same files)
+ *   - Honors `pack.auto_promote_policy` + `auto_land_policy` for autonomous
+ *     state transitions (default OFF; per-task opt-in required)
+ *   - Sends Slack notifications via webhook (multi-backend; see notifications.ts)
+ *   - Handles SIGTERM cleanly (lets in-flight workers finish; see drain.ts)
+ *   - Daily budget tracking + pause-when-exhausted (budget.ts + decisionRubric.ts)
+ *
+ * For host-durable orchestration (launchd / systemd / Docker), see
+ * docs/DURABLE-ORCHESTRATION.md and the deploy/ directory.
  */
 
 import * as fs from 'node:fs';

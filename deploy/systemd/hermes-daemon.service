@@ -1,0 +1,76 @@
+# Hermes daemon systemd unit (Linux).
+#
+# The daemon is the long-running orchestrator that spawns workers, dispatches
+# consensus, and auto-promotes/auto-lands tasks. systemd respawns it on crash.
+#
+# Install:
+#   1. Copy this file to /etc/systemd/system/hermes-daemon.service
+#   2. Edit User=, WorkingDirectory=, ExecStart= to match your install
+#   3. systemctl daemon-reload
+#   4. systemctl enable --now hermes-daemon
+#   5. journalctl -u hermes-daemon -f
+#
+# Uninstall:
+#   systemctl disable --now hermes-daemon
+#   rm /etc/systemd/system/hermes-daemon.service
+#   systemctl daemon-reload
+
+[Unit]
+Description=Hermes autonomous-delivery daemon
+Documentation=https://github.com/rkchoudary/hermes/blob/main/docs/DURABLE-ORCHESTRATION.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Run as a dedicated unprivileged user. Create with:
+#   useradd --system --create-home --shell /usr/sbin/nologin hermes
+User=hermes
+Group=hermes
+
+# Adjust to where you cloned the repo. Common: /opt/hermes or /home/hermes/hermes.
+WorkingDirectory=/opt/hermes
+ExecStart=/usr/bin/node /opt/hermes/node_modules/.bin/tsx /opt/hermes/src/cli/daemon.ts
+
+# Reasonable defaults; override per-host.
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="AUTO_DAEMON_MAX_WORKERS=3"
+Environment="AUTO_DAEMON_POLL_SEC=30"
+Environment="AUTO_DAEMON_DAILY_BUDGET_USD=20"
+Environment="AUTO_DAEMON_WORKER_TIMEOUT_MIN=30"
+
+# Auto-land + auto-promote opt-ins. Uncomment ONLY after a clean sprint of
+# dry-run validation.
+# Environment="AUTO_AUTO_PROMOTE=1"
+# Environment="AUTO_AUTO_LAND=1"
+# Environment="AUTO_AUTO_LAND_APPLY=1"
+
+# Slack webhook (optional; daemon falls back to console if unset).
+# Environment="AUTO_DAEMON_SLACK_WEBHOOK=https://hooks.slack.com/services/..."
+
+# Restart policy — respawn on crash; back off if the bug is in startup.
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# SIGTERM is honored cleanly: daemon's drain logic lets in-flight workers
+# finish before exit. Give it 5 minutes.
+KillSignal=SIGTERM
+TimeoutStopSec=300
+
+# Hardening (defense-in-depth — harness shouldn't escape its working dir).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/opt/hermes
+
+# Resource limits.
+LimitNOFILE=4096
+
+# Logs go to journald by default (journalctl -u hermes-daemon).
+
+[Install]
+WantedBy=multi-user.target

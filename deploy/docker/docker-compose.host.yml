@@ -1,0 +1,81 @@
+# Hermes harness-host docker-compose. Composes the daemon container with a
+# host-mounted .agent-runs volume + Docker socket pass-through so the daemon
+# can spawn worker containers on the host's Docker daemon.
+#
+# Usage:
+#   cd /path/to/hermes
+#   docker compose -f deploy/docker/docker-compose.host.yml up -d
+#   docker compose -f deploy/docker/docker-compose.host.yml logs -f
+#
+# Stop cleanly (lets in-flight workers finish via daemon SIGTERM handling):
+#   docker compose -f deploy/docker/docker-compose.host.yml stop -t 300
+
+services:
+  hermes-daemon:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.harness-host
+    image: hermes-host:latest
+    container_name: hermes-daemon
+    restart: unless-stopped
+
+    # Pass through the host Docker socket so the daemon can spawn worker
+    # containers without needing nested Docker. Standard Docker-out-of-Docker.
+    volumes:
+      - ../../.agent-runs:/opt/hermes/.agent-runs
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount the operator's claude credentials read-only so the daemon can
+      # invoke `claude --print …` against the operator's Claude Code Max
+      # subscription without a per-token API key.
+      - ${HOME}/.claude:/home/hermes/.claude:ro
+
+    environment:
+      - AUTO_DAEMON_MAX_WORKERS=${AUTO_DAEMON_MAX_WORKERS:-3}
+      - AUTO_DAEMON_POLL_SEC=${AUTO_DAEMON_POLL_SEC:-30}
+      - AUTO_DAEMON_DAILY_BUDGET_USD=${AUTO_DAEMON_DAILY_BUDGET_USD:-20}
+      - AUTO_DAEMON_WORKER_TIMEOUT_MIN=${AUTO_DAEMON_WORKER_TIMEOUT_MIN:-30}
+      - AUTO_DAEMON_SLACK_WEBHOOK=${AUTO_DAEMON_SLACK_WEBHOOK:-}
+      # Three-signal opt-in for autonomous transitions. Default OFF — flip
+      # only after a clean dry-run sprint.
+      - AUTO_AUTO_PROMOTE=${AUTO_AUTO_PROMOTE:-0}
+      - AUTO_AUTO_LAND=${AUTO_AUTO_LAND:-0}
+      - AUTO_AUTO_LAND_APPLY=${AUTO_AUTO_LAND_APPLY:-0}
+
+    ports:
+      - "${HERMES_DASHBOARD_PORT:-4500}:4500"
+
+    # The daemon honors SIGTERM cleanly via the drain logic; give it 5 min.
+    stop_signal: SIGTERM
+    stop_grace_period: 5m
+
+    healthcheck:
+      # Touch a heartbeat file every poll_sec; healthcheck reads it.
+      test: ["CMD-SHELL", "test -f .agent-runs/_daemon-state.json && find .agent-runs/_daemon-state.json -mmin -2"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: separate tick container that runs auto:tick every 15 min via
+  # cron-style sleep loop. If you've enabled auto-promote/auto-land in the
+  # daemon already, you can omit this — the daemon's internal loop covers it.
+  hermes-tick:
+    image: hermes-host:latest
+    container_name: hermes-tick
+    restart: unless-stopped
+    depends_on:
+      - hermes-daemon
+    volumes:
+      - ../../.agent-runs:/opt/hermes/.agent-runs
+      - ${HOME}/.claude:/home/hermes/.claude:ro
+    environment:
+      - AUTO_AUTO_PROMOTE=${AUTO_AUTO_PROMOTE:-0}
+      - AUTO_AUTO_LAND=${AUTO_AUTO_LAND:-0}
+      - AUTO_AUTO_LAND_APPLY=${AUTO_AUTO_LAND_APPLY:-0}
+    # Sleep-loop tick; replace with a real cron container if you want fancier
+    # scheduling. 900s = 15min; matches the launchd/systemd cadence.
+    command: >
+      sh -c "while true; do
+        pnpm auto:tick --verbose --auto-promote --auto-land 2>&1 | head -100;
+        sleep 900;
+      done"

@@ -54,6 +54,8 @@ interface TickArgs {
   daily: boolean;
   dryRun: boolean;
   autoPromote: boolean;
+  autoLand: boolean;
+  applyLand: boolean;
   materializeApprovals: boolean;
 }
 
@@ -75,14 +77,24 @@ function parseArgs(argv: string[]): TickArgs {
   // candidates into real TaskPacks. Default OFF; either --materialize-approvals
   // CLI or AUTO_MATERIALIZE_APPROVALS=1 env opts in.
   let materializeApprovals = process.env.AUTO_MATERIALIZE_APPROVALS === '1' || process.env.AUTO_MATERIALIZE_APPROVALS === 'true';
+  // Gap #2 (auto-lander loop): close the ready-for-merge → merged transition that
+  // was previously a manual operator step. Default OFF; --auto-land or
+  // AUTO_AUTO_LAND=1 opts in. Mirrors auto-promote's three-signal opt-in pattern.
+  // --apply-land or AUTO_AUTO_LAND_APPLY=1 additionally authorizes REAL merge
+  // (otherwise dry-run report-only). Both must agree, AND each task's pack must
+  // have auto_land_policy.real_merge_enabled === true.
+  let autoLand = process.env.AUTO_AUTO_LAND === '1' || process.env.AUTO_AUTO_LAND === 'true';
+  let applyLand = process.env.AUTO_AUTO_LAND_APPLY === '1' || process.env.AUTO_AUTO_LAND_APPLY === 'true';
   for (const a of argv) {
     if (a === '--verbose') verbose = true;
     else if (a === '--daily') daily = true;
     else if (a === '--dry-run') dryRun = true;
     else if (a === '--auto-promote') autoPromote = true;
+    else if (a === '--auto-land') autoLand = true;
+    else if (a === '--apply-land') applyLand = true;
     else if (a === '--materialize-approvals') materializeApprovals = true;
   }
-  return { verbose, daily, dryRun, autoPromote, materializeApprovals };
+  return { verbose, daily, dryRun, autoPromote, autoLand, applyLand, materializeApprovals };
 }
 
 function readTickState(): TickState {
@@ -488,6 +500,141 @@ async function main() {
     } catch (e) {
       if (args.verbose) console.warn(`[auto-promote] skipped: ${(e as Error).message}`);
     }
+  }
+
+  // 6a.69b — Auto-land loop (Gap #2 closure: 2026-05-03). Mirrors the auto-promote
+  // pattern but for `ready-for-merge → merged`. Three-signal opt-in:
+  //   1. CLI: --auto-land OR AUTO_AUTO_LAND=1 env (this `args.autoLand`)
+  //   2. Per-task: pack.auto_land_policy.enabled === true
+  //   3. Per-task: pack.type ∈ pack.auto_land_policy.allowed_task_types AND
+  //      codex.score ≥ pack.auto_land_policy.min_score (default 8.0; raised
+  //      above auto-promote 7.5) AND last N consecutive GO rounds.
+  // For REAL merge (vs dry-run report): pack.auto_land_policy.real_merge_enabled
+  // === true AND args.applyLand. Both must agree.
+  // Each decision audited as kind='auto-land-decision'. Drives ready-for-merge
+  // tasks across the finish line — closes the "30 tasks frozen at
+  // ready-for-merge" failure mode where tick auto-promoted but nothing landed.
+  if (args.autoLand) {
+    try {
+      const { evaluateAutoLand } = await import('../lib/autoLand');
+      const { readTaskPack, listRuns, listTasks } = await import('../lib/runState');
+      const { appendOverrideAudit } = await import('../lib/overrideAudit');
+      const { captureIdentity } = await import('../lib/sod');
+      let evaluated = 0;
+      let landed = 0;
+      let denied = 0;
+      let dryRunReports = 0;
+      for (const runId of listRuns()) {
+        for (const taskId of listTasks(runId)) {
+          let pack;
+          try { pack = readTaskPack(runId, taskId); } catch { continue; }
+          if (pack.state !== 'ready-for-merge') continue;
+          evaluated += 1;
+          // Resolve target branch from pack (best-effort) so the protected-branch
+          // predicate has signal even when run inside tick. The pack schema
+          // doesn't store target branch directly; default to 'main' which is
+          // always in protected_branches_excluded (so dry-run-eligible tasks
+          // surface for operator review).
+          const targetBranch = (pack as unknown as { target_branch?: string }).target_branch
+            ?? (pack as unknown as { branch?: string }).branch
+            ?? 'main';
+          const verdict = evaluateAutoLand(pack, {
+            globalOptIn: args.autoLand,
+            applyAuthorization: args.applyLand,
+            targetBranch,
+            runId,
+          });
+          // Audit every decision (eligible or not, real-merge or dry-run).
+          // Operators need to see "harness considered TP-X for auto-land".
+          if (!args.dryRun) {
+            try {
+              appendOverrideAudit(REPO_ROOT, {
+                schema_version: '1',
+                at: new Date().toISOString(),
+                pid: process.pid,
+                actor: captureIdentity(),
+                kind: 'auto-land-decision',
+                reason: verdict.summary,
+                task_id: taskId,
+                run_id: runId,
+                context: {
+                  eligible: verdict.eligible,
+                  real_merge_authorized: verdict.real_merge_authorized,
+                  predicates: verdict.predicates,
+                  suggested_merge_command: verdict.suggested_merge_command,
+                } as unknown as Record<string, unknown>,
+              });
+            } catch { /* audit best-effort; never block tick */ }
+          }
+          if (!verdict.eligible) { denied += 1; continue; }
+          if (!verdict.real_merge_authorized) {
+            // Eligible but in dry-run mode (either pack.real_merge_enabled=false
+            // or AUTO_AUTO_LAND_APPLY not set). Surface as INFO so operators
+            // see what would have landed.
+            dryRunReports += 1;
+            if (args.verbose) console.log(`[auto-land ${now}] dry-run eligible: ${taskId} — ${verdict.summary}`);
+            postSlack(`[INFO] auto-land DRY-RUN eligible: ${taskId} — ${verdict.suggested_merge_command ?? 'no PR number'}`, args.dryRun);
+            continue;
+          }
+          // Real-merge authorized. Invoke auto:land which has its own pre-flight,
+          // CAS lock, branch verification, and audit — we just trigger.
+          if (args.verbose) console.log(`[auto-land ${now}] real-merge: ${taskId} — ${verdict.summary}`);
+          if (!args.dryRun) {
+            const result = spawnSync(
+              'pnpm',
+              ['--silent', '--dir', PACKAGE_ROOT, 'auto:land', taskId],
+              { encoding: 'utf8', timeout: 600_000 } // 10 min — merge can take time
+            );
+            if (result.status === 0) {
+              landed += 1;
+              postSlack(`[SUCCESS] auto-land: ${taskId} merged (codex ${pack.codex?.score})`, args.dryRun);
+            } else {
+              postSlack(`[ALERT] auto-land: ${taskId} INVOCATION FAILED — ${(result.stderr || result.stdout).slice(0, 300)}`, args.dryRun);
+            }
+          }
+        }
+      }
+      if (args.verbose && evaluated > 0) {
+        console.log(`[auto-land ${now}] evaluated=${evaluated} landed=${landed} dry-run-eligible=${dryRunReports} denied=${denied} (apply=${args.applyLand}, tick-dry-run=${args.dryRun})`);
+      }
+    } catch (e) {
+      if (args.verbose) console.warn(`[auto-land] skipped: ${(e as Error).message}`);
+    }
+  }
+
+  // 6a.69c — Queued-but-idle detector (Gap #4 closure: 2026-05-03). If the
+  // queue has tasks pending AND no workers are registered AND no awaiting-review
+  // tasks have a consensus dispatch in flight, the harness is wedged: tasks are
+  // ready but nothing is processing them. This is the failure mode where an
+  // operator stops `auto:daemon` and forgets — the queue grows but produces
+  // nothing. Surfaces a single Slack [ALERT] per tick (idempotent — same
+  // message repeats only if the state persists; operators should silence by
+  // either starting the daemon or draining the queue manually).
+  //
+  // We deliberately do NOT auto-spawn the daemon from tick — that crosses the
+  // supervisor boundary (tick is one-shot, daemon is long-running) and creates
+  // unowned processes. See docs/DURABLE-ORCHESTRATION.md for the durable
+  // launchd/systemd path.
+  try {
+    const { listQueue } = await import('../lib/taskQueue');
+    const { listRegistered } = await import('../lib/processWatchdog');
+    const queued = listQueue(REPO_ROOT);
+    const registered = listRegistered(REPO_ROOT);
+    const liveWorkers = registered.filter((e) =>
+      e.kind === 'claude-cli-worker' || e.kind === 'codex-consensus'
+    );
+    if (queued.length > 0 && liveWorkers.length === 0) {
+      const msg =
+        `[ALERT] queued-but-idle: ${queued.length} task(s) waiting in _task-queue.json but ZERO live workers (claude-cli-worker, codex-consensus). ` +
+        `Either start the daemon (\`pnpm auto:daemon\`) or wire up durable orchestration ` +
+        `(see docs/DURABLE-ORCHESTRATION.md). Queue: ${queued.slice(0, 3).map((q) => q.task_id).join(', ')}${queued.length > 3 ? ` (+${queued.length - 3} more)` : ''}`;
+      if (args.verbose) console.warn(`[queued-idle ${now}] ${msg}`);
+      postSlack(msg, args.dryRun);
+    } else if (args.verbose && (queued.length > 0 || liveWorkers.length > 0)) {
+      console.log(`[queued-idle ${now}] queued=${queued.length} live-workers=${liveWorkers.length} (healthy)`);
+    }
+  } catch (e) {
+    if (args.verbose) console.warn(`[queued-idle] check skipped: ${(e as Error).message}`);
   }
 
   // 6a.69 — Materialize approved gap candidates into TaskPacks (Sprint 4,

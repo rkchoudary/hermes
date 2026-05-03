@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hermes daemon launchd unit (macOS).
+
+  Install:
+    1. cp deploy/launchd/com.hermes.daemon.plist ~/Library/LaunchAgents/
+    2. Edit the plist: replace HERMES_REPO_PATH with your local checkout path
+       (e.g. /Users/you/GitHub/hermes) and HERMES_NODE_PATH with the absolute
+       path to your node binary (`which node`).
+    3. launchctl load ~/Library/LaunchAgents/com.hermes.daemon.plist
+    4. tail -f ~/Library/Logs/Hermes/daemon.log
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.hermes.daemon.plist
+    rm ~/Library/LaunchAgents/com.hermes.daemon.plist
+
+  Why launchd vs cron: launchd respawns the daemon if it crashes; cron does
+  not. The daemon process is the long-running orchestrator (spawns workers,
+  dispatches consensus, auto-promotes). Lose it, lose autonomous progress.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hermes.daemon</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>HERMES_NODE_PATH/bin/node</string>
+    <string>HERMES_REPO_PATH/node_modules/.bin/tsx</string>
+    <string>HERMES_REPO_PATH/src/cli/daemon.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>HERMES_REPO_PATH</string>
+
+  <!-- Run as the operator user, not root. Daemon never needs root. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <!-- Respawn if the daemon exits non-zero (crash). -->
+    <key>SuccessfulExit</key>
+    <false/>
+    <!-- Don't respawn on operator-clean exit (e.g. drain + SIGTERM). -->
+  </dict>
+
+  <!-- Ten-second back-off between respawns to avoid hot-loop on a config bug. -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <!-- Hermes daemon writes its own structured logs under .agent-runs/_daemon-state.json
+       and emits Slack via notify config; these are the catch-all for stdout/stderr
+       (e.g. import errors, fatal panics). -->
+  <key>StandardOutPath</key>
+  <string>HERMES_REPO_PATH/.agent-runs/_launchd-daemon.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>HERMES_REPO_PATH/.agent-runs/_launchd-daemon.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Path: include /usr/local/bin and /opt/homebrew/bin so pnpm + claude resolve. -->
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    <!-- Reasonable defaults for unattended operation. Override per-host. -->
+    <key>AUTO_DAEMON_MAX_WORKERS</key>
+    <string>3</string>
+    <key>AUTO_DAEMON_POLL_SEC</key>
+    <string>30</string>
+    <key>AUTO_DAEMON_DAILY_BUDGET_USD</key>
+    <string>20</string>
+    <key>AUTO_DAEMON_WORKER_TIMEOUT_MIN</key>
+    <string>30</string>
+    <!-- Auto-land + auto-promote opt-ins. Default OFF on installs; uncomment
+         and set to "1" once operator has reviewed the policy + tested in
+         dry-run for at least one full sprint. -->
+    <!--
+    <key>AUTO_AUTO_PROMOTE</key>
+    <string>1</string>
+    <key>AUTO_AUTO_LAND</key>
+    <string>1</string>
+    <key>AUTO_AUTO_LAND_APPLY</key>
+    <string>1</string>
+    -->
+  </dict>
+
+  <!-- Resource limits — daemon should never need more than these. -->
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>4096</integer>
+  </dict>
+</dict>
+</plist>

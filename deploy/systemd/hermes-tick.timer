@@ -1,0 +1,19 @@
+# Hermes tick timer (Linux). Fires hermes-tick.service every 15 minutes.
+#
+# Install: see hermes-tick.service.
+
+[Unit]
+Description=Run hermes-tick.service every 15 minutes
+Documentation=https://github.com/rkchoudary/hermes/blob/main/docs/DURABLE-ORCHESTRATION.md
+Requires=hermes-tick.service
+
+[Timer]
+# 15 minutes after boot, then every 15 minutes thereafter.
+OnBootSec=15min
+OnUnitActiveSec=15min
+# Survive sleep/suspend gaps; if the timer would have fired while suspended,
+# fire ASAP on resume. Important for laptop deployments.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

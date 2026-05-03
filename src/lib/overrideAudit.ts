@@ -34,6 +34,7 @@ export const OverrideKind = z.enum([
   'cleanup-action',                // cleanupPolicy deleted/archived stale resources per retention rules
   'health-alert',                  // systemHealth raised an alert (disk, memory, registry size, etc.)
   'auto-promote-decision',         // v0.5.0: auto:tick --auto-promote evaluated a promotable task (eligible OR not)
+  'auto-land-decision',            // 2026-05-03: auto:tick --auto-land evaluated a ready-for-merge task (eligible OR not; real-merge OR dry-run)
   'interrupt-task',                // operator wrote a per-task interrupt sentinel (auto:interrupt)
   'steer-task',                    // operator issued a mid-task steering directive (auto:steer)
 ]);
