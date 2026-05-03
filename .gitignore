@@ -28,6 +28,10 @@ session-history/
 tick-state.json
 .harness-cache/
 
+# Operator-local config + extracted credentials (claude max plan tokens
+# from macOS Keychain, identity.json, etc.). NEVER commit.
+.harness/
+
 # Per-developer settings
 .claude/settings.local.json
 
